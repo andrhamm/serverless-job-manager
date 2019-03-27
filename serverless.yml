@@ -1,0 +1,353 @@
+service:
+  name: serverless-job-manager
+
+frameworkVersion: '>=1.3.8 <2.0.0'
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  stage: ${opt:stage, 'stage'}
+  profile: ${opt:profile, 'gasbuddy-staging'}
+  region: us-east-1
+  environment:
+    # NOTE: this is useful for local invocations and has no affect in deployed environments
+    AWS_PROFILE: ${self:provider.profile}
+    SERVICE_NAME: ${self:service.name}-${self:provider.stage}
+    STATE_MACHINE_ARN_EXECUTE_JOB: ${self:resources.Outputs.ExecuteJobExecutionStateMachineARN.Value}
+    STATE_MACHINE_ARN_QUEUE_JOB_EXECUTION: ${self:resources.Outputs.QueueJobExecutionStateMachineARN.Value}
+    CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
+    DYNAMODB_TABLE_NAME_JOBS: ${self:custom.dynamodb_table_name_jobs}
+    DYNAMODB_INDEX_NAME_JOBS_GUID: ${self:custom.dynamodb_index_name_jobs_guid}
+    # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
+    #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - states:StartExecution
+      Resource:
+        - Ref: ExecuteJobExecution
+    - Effect: Allow
+      Action: iam:PassRole
+      Resource:
+        -  arn:aws:iam::#{AWS::AccountId}:role/${self:custom.iam_role_name_cloudwatch_events}
+    - Effect: Allow
+      Action:
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+      Resource:
+        - Fn::GetAtt: [ JobsDynamoDbTable, Arn ]
+    - Effect: Allow
+      Action:
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+      Resource:
+        - arn:aws:sqs:#{AWS::Region}:#{AWS::AccountId}:${self:custom.sqs_fifo_queue_name_job_execution_events}
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+      Resource:
+        - Fn::Join:
+            - ""
+            - - Fn::GetAtt: [ JobsDynamoDbTable, Arn ]
+              - "/index/${self:custom.dynamodb_index_name_jobs_guid}"
+    - Effect: Allow
+      Action:
+        - events:RemoveTargets
+        - events:PutTargets
+        - events:PutRule
+        - events:DeleteRule
+        - events:DescribeRule
+        - events:ListRules
+      Resource:
+        # use tag-based permissions?... something more secure than a string prefix?
+        - arn:aws:events:#{AWS::Region}:#{AWS::AccountId}:rule/${self:provider.environment.CLOUDWATCH_EVENTS_RULE_PREFIX}*
+    - Effect: Allow
+      Action:
+        - events:ListRules
+      Resource:
+        # use tag-based permissions?... something more secure than a string prefix?
+        - arn:aws:events:#{AWS::Region}:#{AWS::AccountId}:rule/*
+    - Effect: Allow
+      Action:
+        - lambda:InvokeFunction
+      Resource:
+        - arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-startExecutionWithEvent
+
+plugins:
+  # - serverless-iam-roles-per-function
+  - serverless-pseudo-parameters
+  - serverless-step-functions
+  - serverless-webpack
+
+custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules:
+      forceExclude:
+        - aws-sdk
+    packager: npm
+  # serverless-iam-roles-per-function:
+  #   defaultInherit: true
+  dynamodb_table_name_jobs: ${self:service.name}-${self:provider.stage}-jobs
+  dynamodb_table_name_job_executions: ${self:service.name}-${self:provider.stage}-job-executions
+  dynamodb_index_name_jobs_guid: ${self:service.name}-${self:provider.stage}-jobs-guid
+  sqs_fifo_queue_name_job_execution_events: ${self:service.name}-${self:provider.stage}-job-execution-events.fifo
+  iam_role_name_cloudwatch_events: ${self:service.name}-${self:provider.stage}-cloudwatchevents
+
+functions:
+  # Step function task handlers
+  workExecutionQueue:
+    handler: handlers/work-execution-queue.handler
+    description: Lambda that pulls a single execution event off the FIFO queue and starts a job execution
+    timeout: 30
+    environment:
+      SQS_QUEUE_URL_JOB_EXECUTION_EVENTS:
+        Ref: JobExecutionEventsFifoSqsQueue
+      LAMBDA_ARN_START_EXECUTION_WITH_EVENT: ${self:resources.Outputs.StartExecutionWithEventLambdaFunctionARN.Value}
+  # insertJobExecutionPending:
+  #   handler: handlers/start-execution-with-event.handler
+  #   description: Lambda that receives the CloudWatch Event and starts the state machine execution.
+  startExecutionWithEvent:
+    handler: handlers/start-execution-with-event.handler
+    description: Lambda that receives the execution event starts the state machine execution.
+  # lookupJobByExecutionEvent:
+  #   handler: handlers/lookup-job-by-execution-event.handler
+  getJobLock:
+    handler: handlers/get-job-lock.handler
+
+  # DynamoDB Stream handlers
+  updateJobSchedule:
+    handler: handlers/update-job-schedule.handler
+    description: Lambda that receives the DynamoDb event when a job is updated, updates event rule
+    environment:
+      IAM_ROLE_ARN_CLOUDWATCH_EVENTS:
+        Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
+      SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS:
+        Fn::GetAtt: [ JobExecutionEventsFifoSqsQueue, Arn ]
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt: [ JobsDynamoDbTable, StreamArn ]
+          batchSize: 1
+
+  # API handlers
+  putJob:
+    handler: handlers/api/put-job.handler
+    description: Idempotent job create/update
+    events:
+      - http:
+          path: services/{service_name}/jobs/{job_name}
+          method: put
+  deleteJob:
+    handler: handlers/api/delete-job.handler
+    description: Idempotent job delete
+    events:
+      - http:
+          path: services/{service_name}/jobs/{job_name}
+          method: delete
+  executionCallback:
+    handler: handlers/api/execution-callback.handler
+    description: Endpoint for services to call with job results
+    events:
+      - http:
+          path: callback
+          method: post
+      - http:
+          path: callback/{callback_id}
+          method: get
+  mockHttpInvokeTarget:
+    handler: handlers/api/mock-http-invoke-target.handler
+    description: Endpoint for testing HTTP invoke target
+    events:
+      - http:
+          path: http-invoke
+          method: post
+
+stepFunctions:
+  stateMachines:
+    # putJobApiHandlerStepFunction:
+    #   name: putJobApiHandler
+    #   events:
+    #     - http:
+    #         path: services/{service_name}/jobs/{job_name}
+    #         method: put
+    #   definition:
+    #     Comment:  Idempotent job create/update
+    #     StartAt:
+    #     PutJob:
+    #       Type: Task
+    #       Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-putJob
+    #       End: true
+
+    queueJobExecutionStepFunction:
+      name: queueJobExecution
+      definition:
+        Comment: "Queue a job execution for the given CloudWatch Event Rule event"
+        StartAt: AddToQueue
+        States:
+          AddToQueue:
+            Type: Task
+            Resource: arn:aws:states:::sqs:sendMessage
+            Parameters:
+              QueueUrl: https://sqs.#{AWS::Region}.amazonaws.com/#{AWS::AccountId}/${self:custom.sqs_fifo_queue_name_job_execution_events}
+              MessageBody.$: "$"
+              MessageGroupId.$: "$.sqsMessageGroupId"
+              MessageDeduplicationId.$: "$.eventId"
+            ResultPath: "$.sqs"
+            Next: WorkExecutionQueue
+          WorkExecutionQueue:
+            Type: Task
+            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workExecutionQueue
+            End: true
+            # lambda that pulls the next job off the queue and inserts it into dynamodb
+          #   Type: Choice
+          #   Choices:
+          #     - Variable: "$.exclusive"
+          #       BooleanEquals: true
+          #       Next: WorkExecutionQueue
+          #     - Variable: "$.exclusive"
+          #       BooleanEquals: false
+          #       Next: WorkParallelExecutionQueue
+          # WorkExclusiveExecutionQueue:
+          #   Type: Task
+          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workExclusiveExecutionQueue
+          #   End: true
+          # WorkParallelExecutionQueue:
+          #   Type: Task
+          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workParallelExecutionQueue
+          #   End: true
+
+    executeJobExecutionStepFunction:
+      name: executeJobExecution
+      definition:
+        Comment: "Executes a job for the given CloudWatch Event Rule event"
+        StartAt: GetLockIfExclusive
+        States:
+          GetLockIfExclusive:
+            Type: Choice
+            Choices:
+              - Variable: "$.exclusive"
+                BooleanEquals: true
+                Next: GetJobLock
+              # - Variable: "$.exclusive"
+              #   BooleanEquals: false
+              #   Next: InsertJobExecutionPending
+          GetJobLock:
+            Type: Task
+            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-getJobLock
+            End: true
+          # InsertJobExecutionPending:
+          #   Type: Task
+          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-insertJobExecutionPending
+          #   Next: StartExecution
+          # StartExecution:
+          #   Type: Task
+          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-startExecutionWithEvent
+          #   End: true
+
+resources:
+  Outputs:
+    ExecuteJobExecutionStateMachineARN:
+      Description: The ARN of the ExecuteJobExecution state machine
+      Value:
+        Ref: ExecuteJobExecution
+    QueueJobExecutionStateMachineARN:
+      Description: The ARN of the QueueJobExecution state machine
+      Value:
+        Ref: QueueJobExecution
+    StartExecutionWithEventLambdaFunctionARN:
+      Value:
+        Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
+  Resources:
+    JobExecutionEventsFifoSqsQueue:
+      Type: AWS::SQS::Queue # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sqs-queues.html
+      Properties:
+        QueueName: ${self:custom.sqs_fifo_queue_name_job_execution_events}
+        ContentBasedDeduplication: true
+        FifoQueue: true
+        # MessageRetentionPeriod: 82800 # 23 hours
+    JobsDynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.dynamodb_table_name_jobs}
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: service_name
+            AttributeType: "S"
+          - AttributeName: job_name
+            AttributeType: "S"
+          - AttributeName: guid
+            AttributeType: "S"
+        KeySchema:
+          - AttributeName: service_name
+            KeyType: HASH
+          - AttributeName: job_name
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:custom.dynamodb_index_name_jobs_guid}
+            KeySchema:
+              - AttributeName: guid
+                KeyType: HASH
+            Projection:
+              ProjectionType: KEYS_ONLY
+    IamRoleCloudWatchEvents:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - events.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: root
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                # - Effect: Allow
+                #   Action:
+                #     - sqs:SendMessage
+                #   Resource:
+                #     - Fn::GetAtt: [ JobExecutionEventsFifoSqsQueue, Arn ]
+                - Effect: Allow
+                  Action:
+                    - states:StartExecution
+                  Resource:
+                    # - Ref: ExecuteJobExecution
+                    - Ref: QueueJobExecution
+                # - Effect: Allow
+                #   Action:
+                #     - lambda:InvokeFunction
+                #   Resource:
+                #     - Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
+        RoleName: ${self:custom.iam_role_name_cloudwatch_events}
+
+    # JobExecutionsDynamoDbTable:
+    #   Type: AWS::DynamoDB::Table
+    #   Properties:
+    #     TableName: ${self:custom.dynamodb_table_name_job_executions}
+    #     BillingMode: PAY_PER_REQUEST
+    #     # StreamSpecification:
+    #     #   StreamViewType: NEW_AND_OLD_IMAGES
+    #     AttributeDefinitions:
+    #       - AttributeName: service_name
+    #         AttributeType: "S"
+    #       - AttributeName: job_name
+    #         AttributeType: "S"
+    #     KeySchema:
+    #       # DATE.
+    #       # 2019-03-21.1
+    #       - AttributeName: partition_id
+    #         KeyType: HASH
+    #       # Sort key should contain the DATE as a prefix
+    #       # 2019-03-21
+    #       - AttributeName: execution_composite_key
+    #         KeyType: RANGE
+    #

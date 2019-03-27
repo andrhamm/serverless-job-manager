@@ -1,0 +1,35 @@
+{
+  "name": "serverless-job-manager",
+  "version": "1.0.0",
+  "description": "Serverless cronjob manager",
+  "main": "handler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Andrew Hammond",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/register": "^7.0.0",
+    "babel-core": "^6.26.3",
+    "babel-eslint": "^8.2.3",
+    "babel-loader": "^7.1.4",
+    "babel-plugin-source-map-support": "^2.0.1",
+    "babel-plugin-transform-object-rest-spread": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "eslint-config-gasbuddy": "^4.1.0",
+    "serverless": "^1.38.0",
+    "serverless-iam-roles-per-function": "^1.0.4",
+    "serverless-pseudo-parameters": "^2.4.0",
+    "serverless-step-functions": "^1.15.0",
+    "serverless-webpack": "^5.2.0",
+    "webpack": "^4.29.6",
+    "webpack-node-externals": "^1.7.2"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.424.0",
+    "axios": "^0.18.0",
+    "source-map-support": "^0.5.11",
+    "sqs-consumer": "^5.2.0",
+    "uuid": "^3.3.2"
+  }
+}
