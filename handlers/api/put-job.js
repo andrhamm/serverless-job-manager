@@ -1,5 +1,6 @@
 import uuidv5 from 'uuid/v5';
-import { dynamodb, dynamodbUnmarshall } from '../../lib/aws_clients';
+import { dynamodb, dynamodbMarshall, dynamodbUnmarshall } from '../../lib/aws_clients';
+import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
 const {
   DYNAMODB_TABLE_NAME_JOBS,
@@ -10,57 +11,61 @@ export const handler = async (input, context, callback) => {
 
   // TODO: validate, swagger!
   const {
-    pathParameters: {
-      service_name: serviceName,
-      job_name: jobName
-    },
+    pathParameters,
     body: bodyJson
   } = input;
 
   const body = JSON.parse(bodyJson);
+  const {
+    serviceName,
+    jobName,
+  } = pathParameters;
 
   let {
-    invocation_type: invocationType,
-    invocation_target: invocationTarget,
-    ttl_seconds: ttlSeconds,
+    invocationType,
+    invocationTarget,
+    ttlSeconds,
     async,
     enabled,
     exclusive, // each execution must obtain a lock (concurrency=1)
     payload, // static data to send along with the job, template vars in future
     schedule, // the cloudwatch logs schedule expression (cron or rate)
-  } = body;
+  } = camelCaseObj(body);
 
   let statusCode = 400;
   let headers = {'Content-Type': 'application/json'};
 
   if (schedule === undefined) {
     return {
-      statusCode, headers, body: "{\"message\":\"'Missing schedule'\"}",
+      statusCode, headers, body: `{"message":"Missing schedule"}`,
     };
   }
   if (invocationType === undefined || !['http'].includes(invocationType)) {
     return {
-      statusCode, headers, body: "{\"message\":\"'Missing or invalid invocation_type'\"}",
+      statusCode, headers, body: `{"message":"Missing invocation_type"}`,
     };
   }
   if (invocationTarget === undefined) {
     return {
-      statusCode, headers, body: "{\"message\":\"'Missing invocation_target'\"}",
+      statusCode, headers, body: `{"message":"Missing invocation_target"}`,
     };
   }
   exclusive = exclusive === undefined ? true : !!exclusive;
   if (payload === undefined) {
     payload = "{}";
   }
-  if (ttlSeconds === undefined) {
-    ttlSeconds = 60;
-  } else if (isNaN(parseInt(ttlSeconds))) {
+
+  if (isNaN(parseInt(ttlSeconds))) {
     return {
-      statusCode, headers, body: "{\"message\":\"'Invalid ttl_seconds'\"}",
+      statusCode, headers, body: `{"message":"Invalid ttl_seconds"}`,
     };
   } else {
-    ttlSeconds = parseInt(ttlSeconds);
+    ttlSeconds = Math.max(parseInt(ttlSeconds || 0), 60);
   }
+
+  enabled = !!enabled;
+  async = !!async;
+  exclusive = !!exclusive;
 
   // schedule: cron(0 12 * * ? *)
   // payload: "{\"foo\": \"bar\"}"
@@ -70,48 +75,27 @@ export const handler = async (input, context, callback) => {
   // enabled: true
   // exclusive: true
 
+  // deterministic uuid
+  const guid = uuidv5([serviceName, jobName].join('--'), uuidv5.URL);
+  const deletedAt = null;
+
   try {
     await dynamodb.putItem({
       TableName: DYNAMODB_TABLE_NAME_JOBS,
-      Item: {
-        service_name: {
-          S: serviceName,
-        },
-        job_name: {
-          S: jobName,
-        },
-        guid: {
-          // deterministic uuid
-          S: uuidv5([serviceName, jobName].join('--'), uuidv5.URL),
-        },
-        ttl_seconds: {
-          N: Math.max(ttlSeconds, 60).toString(),
-        },
-        invocation_type: {
-          S: invocationType,
-        },
-        invocation_target: {
-          S: invocationTarget,
-        },
-        payload: {
-          S: payload,
-        },
-        schedule: {
-          S: schedule,
-        },
-        async: {
-          BOOL: !!async,
-        },
-        enabled: {
-          BOOL: !!enabled,
-        },
-        exclusive: {
-          BOOL: !!exclusive,
-        },
-        deleted_at: {
-          NULL: true
-        },
-      },
+      Item: dynamodbMarshall({
+        serviceName,
+        jobName,
+        guid,
+        ttlSeconds,
+        invocationType,
+        invocationTarget,
+        payload,
+        schedule,
+        async,
+        enabled,
+        exclusive,
+        deletedAt,
+      })
     }).promise();
   } catch (e) {
     callback(e);
@@ -121,19 +105,15 @@ export const handler = async (input, context, callback) => {
   const job = await dynamodb.getItem({
     TableName: DYNAMODB_TABLE_NAME_JOBS,
     ConsistentRead: true,
-    Key: {
-      service_name: {
-        S: serviceName,
-      },
-      job_name: {
-        S: jobName,
-      },
-    },
+    Key: dynamodbMarshall({
+      serviceName,
+      jobName,
+    }),
   }).promise();
 
   callback(null,  {
     statusCode: 201,
     headers,
-    body: JSON.stringify(dynamodbUnmarshall(job.Item), null, 2),
+    body: JSON.stringify(snakeCaseObj(dynamodbUnmarshall(job.Item)), null, 2),
   });
 }

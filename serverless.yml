@@ -18,6 +18,9 @@ provider:
     CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
     DYNAMODB_TABLE_NAME_JOBS: ${self:custom.dynamodb_table_name_jobs}
     DYNAMODB_INDEX_NAME_JOBS_GUID: ${self:custom.dynamodb_index_name_jobs_guid}
+    # DYNAMODB_INDEX_NAME_JOBS_SCHEDULE: ${self:custom.dynamodb_index_name_jobs_schedule}
+    DYNAMODB_TABLE_NAME_JOB_EXECUTIONS: ${self:custom.dynamodb_table_name_job_executions}
+    DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS: 8
     # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
     #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
   iamRoleStatements:
@@ -26,6 +29,16 @@ provider:
         - states:StartExecution
       Resource:
         - Ref: ExecuteJobExecution
+    - Effect: Allow
+      Action:
+        - states:sendTaskSuccess
+      Resource:
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
+    - Effect: Allow
+      Action:
+        - states:GetActivityTask
+      Resource:
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
     - Effect: Allow
       Action: iam:PassRole
       Resource:
@@ -37,6 +50,7 @@ provider:
         - dynamodb:UpdateItem
       Resource:
         - Fn::GetAtt: [ JobsDynamoDbTable, Arn ]
+        - Fn::GetAtt: [ JobExecutionsDynamoDbTable, Arn ]
     - Effect: Allow
       Action:
         - sqs:ReceiveMessage
@@ -72,7 +86,8 @@ provider:
       Action:
         - lambda:InvokeFunction
       Resource:
-        - arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-startExecutionWithEvent
+        - ${self:custom.arn_prefix_lambda_function}-startExecutionWithEvent
+        - ${self:custom.arn_prefix_lambda_function}-pollActivityTaskTokens
 
 plugins:
   # - serverless-iam-roles-per-function
@@ -81,20 +96,23 @@ plugins:
   - serverless-webpack
 
 custom:
+  version: 2
   webpack:
     webpackConfig: ./webpack.config.js
     includeModules:
       forceExclude:
         - aws-sdk
     packager: npm
+  arn_prefix_lambda_function: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}
   # serverless-iam-roles-per-function:
   #   defaultInherit: true
   dynamodb_table_name_jobs: ${self:service.name}-${self:provider.stage}-jobs
   dynamodb_table_name_job_executions: ${self:service.name}-${self:provider.stage}-job-executions
   dynamodb_index_name_jobs_guid: ${self:service.name}-${self:provider.stage}-jobs-guid
+  # dynamodb_index_name_jobs_schedule: ${self:service.name}-${self:provider.stage}-jobs-schedule
   sqs_fifo_queue_name_job_execution_events: ${self:service.name}-${self:provider.stage}-job-execution-events.fifo
   iam_role_name_cloudwatch_events: ${self:service.name}-${self:provider.stage}-cloudwatchevents
-
+  step_function_activity_name_await_callback: ${self:service.name}-${self:provider.stage}-awaitCallback
 functions:
   # Step function task handlers
   workExecutionQueue:
@@ -105,16 +123,53 @@ functions:
       SQS_QUEUE_URL_JOB_EXECUTION_EVENTS:
         Ref: JobExecutionEventsFifoSqsQueue
       LAMBDA_ARN_START_EXECUTION_WITH_EVENT: ${self:resources.Outputs.StartExecutionWithEventLambdaFunctionARN.Value}
-  # insertJobExecutionPending:
-  #   handler: handlers/start-execution-with-event.handler
-  #   description: Lambda that receives the CloudWatch Event and starts the state machine execution.
   startExecutionWithEvent:
     handler: handlers/start-execution-with-event.handler
     description: Lambda that receives the execution event starts the state machine execution.
-  # lookupJobByExecutionEvent:
-  #   handler: handlers/lookup-job-by-execution-event.handler
+  getJobByGuid:
+    handler: handlers/get-job-by-guid.handler
   getJobLock:
+    description: For exclusive jobs, locks the job record and passes job attributes to next task
     handler: handlers/get-job-lock.handler
+  getJob:
+    description: For non-exclusive jobs, passes job attributes to next task
+    handler: handlers/get-job.handler
+  getJobExecutionByExecutionKey:
+    handler: handlers/get-job-execution-by-execution-key.handler
+  insertJobExecution:
+    handler: handlers/insert-job-execution.handler
+    description: Lambda that inserts the pending job execution into DynamoDB
+  invokeServiceExecution:
+    handler: handlers/invoke-service-execution.handler
+    description: Lambda that calls the invocation_target with the event details
+    environment:
+      API_BASE:
+        Fn::Join:
+          - ""
+          - - Ref: ApiGatewayRestApi
+            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+  # pollActivityTaskTokens:
+  #   handler: handlers/poll-activity-task-tokens.handler
+  #   description: Lambda that polls StepFunctions for the AwaitCallback activity task token and writes them to DynamoDb
+  #   reservedConcurrency: 10
+  #   timeout: 85 # TODO: tune this
+  #   environment:
+  #     POLL_TIMEOUT_SECONDS: 65
+  #     STEP_FUNCTION_ACTIVITY_ARN_AWAIT_CALLBACK: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
+  # launchActivityWorker:
+  #   handler: handlers/launch-activity-worker.handler
+  #   description: Lambda that launches the activity woker asynchronously
+  #   environment:
+  #     LAMBDA_ARN_POLL_ACTIVITY_TASK_TOKENS: ${self:resources.Outputs.PollActivityTaskTokensLambdaFunctionARN.Value}
+  getActivityTaskToken:
+    handler: handlers/get-activity-task-token.handler
+    description: Attempts to retrieve the activity task token
+    timeout: 90 # TODO: tune this
+    environment:
+      STEP_FUNCTION_ACTIVITY_ARN_AWAIT_CALLBACK: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
+  insertActivityTaskToken:
+    handler: handlers/insert-activity-task-token.handler
+    timeout: 30 # allow time for retries
 
   # DynamoDB Stream handlers
   updateJobSchedule:
@@ -138,25 +193,18 @@ functions:
     description: Idempotent job create/update
     events:
       - http:
-          path: services/{service_name}/jobs/{job_name}
+          path: services/{serviceName}/jobs/{jobName}
           method: put
   deleteJob:
     handler: handlers/api/delete-job.handler
     description: Idempotent job delete
     events:
       - http:
-          path: services/{service_name}/jobs/{job_name}
+          path: services/{serviceName}/jobs/{jobName}
           method: delete
-  executionCallback:
-    handler: handlers/api/execution-callback.handler
+  updateExecutionStatus:
+    handler: handlers/api/update-execution-status.handler
     description: Endpoint for services to call with job results
-    events:
-      - http:
-          path: callback
-          method: post
-      - http:
-          path: callback/{callback_id}
-          method: get
   mockHttpInvokeTarget:
     handler: handlers/api/mock-http-invoke-target.handler
     description: Endpoint for testing HTTP invoke target
@@ -178,7 +226,7 @@ stepFunctions:
     #     StartAt:
     #     PutJob:
     #       Type: Task
-    #       Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-putJob
+    #       Resource: ${self:custom.arn_prefix_lambda_function}-putJob
     #       End: true
 
     queueJobExecutionStepFunction:
@@ -199,7 +247,7 @@ stepFunctions:
             Next: WorkExecutionQueue
           WorkExecutionQueue:
             Type: Task
-            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workExecutionQueue
+            Resource: ${self:custom.arn_prefix_lambda_function}-workExecutionQueue
             End: true
             # lambda that pulls the next job off the queue and inserts it into dynamodb
           #   Type: Choice
@@ -212,11 +260,11 @@ stepFunctions:
           #       Next: WorkParallelExecutionQueue
           # WorkExclusiveExecutionQueue:
           #   Type: Task
-          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workExclusiveExecutionQueue
+          #   Resource: ${self:custom.arn_prefix_lambda_function}-workExclusiveExecutionQueue
           #   End: true
           # WorkParallelExecutionQueue:
           #   Type: Task
-          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-workParallelExecutionQueue
+          #   Resource: ${self:custom.arn_prefix_lambda_function}-workParallelExecutionQueue
           #   End: true
 
     executeJobExecutionStepFunction:
@@ -231,21 +279,114 @@ stepFunctions:
               - Variable: "$.exclusive"
                 BooleanEquals: true
                 Next: GetJobLock
-              # - Variable: "$.exclusive"
-              #   BooleanEquals: false
-              #   Next: InsertJobExecutionPending
+              - Variable: "$.exclusive"
+                BooleanEquals: false
+                Next: GetJob
           GetJobLock:
             Type: Task
-            Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-getJobLock
+            Resource: ${self:custom.arn_prefix_lambda_function}-getJobLock
+            Next: InsertJobExecution
+          GetJob:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-getJob
+            Next: InsertJobExecution
+          InsertJobExecution:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-insertJobExecution
+            Next: Callback
+          # LaunchActivityWorker:
+          #   Type: Task
+          #   Resource: ${self:custom.arn_prefix_lambda_function}-launchActivityWorker
+          #   Next: Callback
+          Callback:
+            Type: Parallel
+            Next: FinishCallback
+            Branches:
+              - StartAt: AwaitCallback
+                States:
+                  AwaitCallback:
+                    Type: Task
+                    Resource: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
+                    HeartbeatSeconds: 60
+                    End: true
+              - StartAt: DelayForActivityStart
+                States:
+                  DelayForActivityStart:
+                    Type: Wait
+                    Seconds: 3
+                    Next: GetActivityTaskToken
+                  # LaunchActivityWorker:
+                  #   Type: Task
+                  #   Resource: ${self:custom.arn_prefix_lambda_function}-launchActivityWorker
+                  #   Next: InvokeServiceExecution
+                  GetActivityTaskToken:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-getActivityTaskToken
+                    Next: InsertActivityTaskToken
+                  InsertActivityTaskToken:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-insertActivityTaskToken
+                    Next: LoopGetActivityTaskToken
+                  LoopGetActivityTaskToken:
+                    Type: Choice
+                    Choices:
+                      - Variable: "$.loop"
+                        BooleanEquals: true
+                        Next: GetActivityTaskToken
+                      - Variable: "$.loop"
+                        BooleanEquals: false
+                        Next: InvokeServiceExecution
+                  InvokeServiceExecution:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-invokeServiceExecution
+                    InputPath: "$.jobExecution"
+                    End: true
+          FinishCallback:
+            # Type: Task
+            # Resource: ${self:custom.arn_prefix_lambda_function}-finishCallback
+            Type: Pass
             End: true
-          # InsertJobExecutionPending:
-          #   Type: Task
-          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-insertJobExecutionPending
-          #   Next: StartExecution
-          # StartExecution:
-          #   Type: Task
-          #   Resource: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}-startExecutionWithEvent
-          #   End: true
+    executionCallbackStepFunction:
+      name: executionCallback
+      events:
+        - http:
+            path: callback/{jobGuid}/{encodedExecutionKey}
+            method: post
+            request:
+              template:
+                application/json: |
+                  #set( $body = $util.escapeJavaScript($input.json('$')) )
+                  {
+                    "stateMachineArn":"arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:executionCallback",
+                    "input" : "{\"pathParameters\": { \"jobGuid\": \"$input.params('jobGuid')\", \"encodedExecutionKey\": \"$input.params('encodedExecutionKey')\" }}"
+                  }
+      definition:
+        Comment: Processes the results of a service's job execution
+        StartAt: GetJobAndExecution
+        States:
+          GetJobAndExecution:
+            Type: Parallel
+            Next: UpdateExecutionStatus
+            Branches:
+              - StartAt: GetJobByGuid
+                States:
+                  GetJobByGuid:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-getJobByGuid
+                    End: true
+              - StartAt: GetJobExecutionByExecutionKey
+                States:
+                  GetJobExecutionByExecutionKey:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-getJobExecutionByExecutionKey
+                    End: true
+          UpdateExecutionStatus:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateExecutionStatus
+            End: true
+
+  activities:
+    - ${self:custom.step_function_activity_name_await_callback}
 
 resources:
   Outputs:
@@ -260,6 +401,9 @@ resources:
     StartExecutionWithEventLambdaFunctionARN:
       Value:
         Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
+    # PollActivityTaskTokensLambdaFunctionARN:
+    #   Value:
+    #     Fn::GetAtt: [ PollActivityTaskTokensLambdaFunction, Arn ]
   Resources:
     JobExecutionEventsFifoSqsQueue:
       Type: AWS::SQS::Queue # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sqs-queues.html
@@ -276,16 +420,16 @@ resources:
         StreamSpecification:
           StreamViewType: NEW_AND_OLD_IMAGES
         AttributeDefinitions:
-          - AttributeName: service_name
-            AttributeType: "S"
-          - AttributeName: job_name
-            AttributeType: "S"
+          - AttributeName: serviceName
+            AttributeType: S
+          - AttributeName: jobName
+            AttributeType: S
           - AttributeName: guid
-            AttributeType: "S"
+            AttributeType: S
         KeySchema:
-          - AttributeName: service_name
+          - AttributeName: serviceName
             KeyType: HASH
-          - AttributeName: job_name
+          - AttributeName: jobName
             KeyType: RANGE
         GlobalSecondaryIndexes:
           - IndexName: ${self:custom.dynamodb_index_name_jobs_guid}
@@ -294,6 +438,34 @@ resources:
                 KeyType: HASH
             Projection:
               ProjectionType: KEYS_ONLY
+          # - IndexName: ${self:custom.dynamodb_index_name_jobs_schedule}
+          #   KeySchema:
+          #     - AttributeName: schedule
+          #       KeyType: HASH
+          #     - AttributeName: service_job
+          #       KeyType: RANGE
+          #   Projection:
+          #     ProjectionType: KEYS_ONLY
+    JobExecutionsDynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.dynamodb_table_name_job_executions}
+        BillingMode: PAY_PER_REQUEST
+        # StreamSpecification:
+        #   StreamViewType: NEW_AND_OLD_IMAGES
+        AttributeDefinitions:
+          - AttributeName: partitionKey
+            AttributeType: S
+          - AttributeName: sortKey
+            AttributeType: S
+        KeySchema:
+          # `${DATE}.${parseInt(eventId.replace(/[^0-9a-fA-F]/g, '').substr(-13),16) % DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS}`
+          # exmaple: 20190321.1
+          - AttributeName: partitionKey
+            KeyType: HASH
+          # `${serviceName}:${jobName}:${eventTimeMs}:${eventId}`
+          - AttributeName: sortKey
+            KeyType: RANGE
     IamRoleCloudWatchEvents:
       Type: AWS::IAM::Role
       Properties:
@@ -328,26 +500,3 @@ resources:
                 #   Resource:
                 #     - Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
         RoleName: ${self:custom.iam_role_name_cloudwatch_events}
-
-    # JobExecutionsDynamoDbTable:
-    #   Type: AWS::DynamoDB::Table
-    #   Properties:
-    #     TableName: ${self:custom.dynamodb_table_name_job_executions}
-    #     BillingMode: PAY_PER_REQUEST
-    #     # StreamSpecification:
-    #     #   StreamViewType: NEW_AND_OLD_IMAGES
-    #     AttributeDefinitions:
-    #       - AttributeName: service_name
-    #         AttributeType: "S"
-    #       - AttributeName: job_name
-    #         AttributeType: "S"
-    #     KeySchema:
-    #       # DATE.
-    #       # 2019-03-21.1
-    #       - AttributeName: partition_id
-    #         KeyType: HASH
-    #       # Sort key should contain the DATE as a prefix
-    #       # 2019-03-21
-    #       - AttributeName: execution_composite_key
-    #         KeyType: RANGE
-    #

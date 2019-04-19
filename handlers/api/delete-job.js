@@ -1,5 +1,5 @@
 import uuidv5 from 'uuid/v5';
-import { dynamodb } from '../../lib/aws_clients';
+import { dynamodb, dynamodbMarshall } from '../../lib/aws_clients';
 
 const {
   DYNAMODB_TABLE_NAME_JOBS,
@@ -10,38 +10,26 @@ export const handler = async (input, context, callback) => {
 
   // TODO: validate, swagger!
   const {
-    pathParameters: {
-      service_name: serviceName,
-      job_name: jobName
-    }
-  } = input;
+    serviceName,
+    jobName,
+  } = input.pathParameters;
 
   try {
     await dynamodb.updateItem({
       TableName: DYNAMODB_TABLE_NAME_JOBS,
-      Key: {
-        service_name: {
-          S: serviceName,
-        },
-        job_name: {
-          S: jobName,
-        },
-      },
+      Key: dynamodbMarshall({
+        serviceName,
+        jobName,
+      }),
       ExpressionAttributeNames: {
-        '#DEL': 'deleted_at',
+        '#DEL': 'deletedAt',
         '#EN': 'enabled',
       },
-      ExpressionAttributeValues: {
-        ':now' : {
-          N: parseInt(Date.now() / 1000).toString(),
-        },
-        ':no': {
-          BOOL: false
-        },
-        ':null': {
-          NULL: true
-        }
-      },
+      ExpressionAttributeValues: dynamodbMarshall({
+        ':now' : parseInt(Date.now() / 1000),
+        ':no': false,
+        ':null': null,
+      }),
       UpdateExpression: "SET #DEL = :now, #EN = :no",
       ConditionExpression: "#DEL = :null",
     }).promise();

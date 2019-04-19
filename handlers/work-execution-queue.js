@@ -45,10 +45,6 @@ export const handler = async (input, context, callback) => {
           throw new Error('Message is from a different message group, returning it to the queue');
         }
 
-        sqsConsumer.stop();
-
-        targetMessageProcessed = true;
-
         const lambdaResp = await lambda.invoke({
           FunctionName: LAMBDA_ARN_START_EXECUTION_WITH_EVENT,
           InvocationType: 'Event', // async / fire and forget
@@ -56,12 +52,18 @@ export const handler = async (input, context, callback) => {
         }).promise();
 
         console.log(`lambdaResp: ` + JSON.stringify(lambdaResp, null, 2));
+
+        if (isTargetMessage) {
+          sqsConsumer.stop();
+
+          targetMessageProcessed = true;
+        }
       },
     });
 
-    sqsConsumer.on('message_processed', (message) => {
-      console.log(`message_processed: ` + JSON.stringify(message, null, 2));
-    });
+    // sqsConsumer.on('message_processed', (message) => {
+    //   console.log(`message_processed: ` + JSON.stringify(message, null, 2));
+    // });
 
     sqsConsumer.on('error', (err) => {
       console.error(`error: ${err.message}`);

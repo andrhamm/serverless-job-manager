@@ -32,8 +32,11 @@ export const handler = async (input, context, callback) => {
   const newImage = newImageMarshalled ? dynamodbUnmarshall(newImageMarshalled) : {};
   const oldImage = oldImageMarshalled ? dynamodbUnmarshall(oldImageMarshalled) : {};
 
-  const serviceName = jobKey.service_name;
-  const jobName = jobKey.job_name;
+  const {
+    serviceName,
+    jobName,
+  } = jobKey;
+
   const jobGuid = newImage.guid || oldImage.guid;
   const sqsMessageGroupId = `${serviceName}:${jobName}`;
 
@@ -87,8 +90,9 @@ export const handler = async (input, context, callback) => {
 
     inputTemplate += `"ruleName":"${ruleName}",`;
     inputTemplate += `"ruleSchedule":"${newImage.schedule}",`;
-    inputTemplate += `"invocationType":"${newImage.invocation_type}",`;
-    inputTemplate += `"invocationTarget":"${newImage.invocation_target}",`;
+    inputTemplate += `"invocationType":"${newImage.invocationType}",`;
+    inputTemplate += `"invocationTarget":"${newImage.invocationTarget}",`;
+    inputTemplate += `"ttlSeconds": ${newImage.ttlSeconds},`
     inputTemplate += `"exclusive": ${newImage.exclusive ? 'true' : 'false'},`;
     inputTemplate += `"async": ${newImage.async ? 'true' : 'false'},`;
     inputTemplate += `"jobName":"${jobName}",`;

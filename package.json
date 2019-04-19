@@ -26,8 +26,12 @@
     "webpack-node-externals": "^1.7.2"
   },
   "dependencies": {
+    "async-retry": "^1.2.3",
     "aws-sdk": "^2.424.0",
     "axios": "^0.18.0",
+    "lodash.camelcase": "^4.3.0",
+    "lodash.mapkeys": "^4.6.0",
+    "lodash.snakecase": "^4.1.1",
     "source-map-support": "^0.5.11",
     "sqs-consumer": "^5.2.0",
     "uuid": "^3.3.2"
