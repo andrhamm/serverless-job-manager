@@ -10,9 +10,11 @@ export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
 
   const {
-    sqsMessageGroupId,
     sqs: {
-      MessageId: sqsMessageId,
+      messageGroupId: sqsMessageGroupId,
+      message: {
+        MessageId: sqsMessageId
+      },
     },
   } = input;
 

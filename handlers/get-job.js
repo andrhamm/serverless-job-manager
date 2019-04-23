@@ -1,5 +1,6 @@
 import { dynamodb, dynamodbUnmarshall, dynamodbMarshall } from '../lib/aws_clients';
-import { camelCaseObj } from '../lib/common';
+import { camelCaseObj, filterProps } from '../lib/common';
+import { splitJobStaticProps } from '../lib/job_executions_utils';
 
 const {
   DYNAMODB_TABLE_NAME_JOBS,
@@ -9,32 +10,32 @@ export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
 
   const {
-    jobName,
-    serviceName,
+    jobStatic: {
+      key: jobKey,
+    },
   } = input;
 
-  // does a consistent write to get a lock on the job
-  const job = await dynamodb.getItem({
+  const jobResp = await dynamodb.getItem({
     TableName: DYNAMODB_TABLE_NAME_JOBS,
     ConsistentRead: true,
-    Key: dynamodbMarshall({
-      serviceName,
-      jobName,
-    }),
+    Key: dynamodbMarshall(jobKey),
   }).promise();
 
-  // the input already has many of the job properties specific to the execution event,
+  console.log(`jobResp: ${JSON.stringify(jobResp, null, 2)}`);
+
+  /// the input already has many of the job properties specific to the execution event,
   // but later we will need other properties from the job so add those (previous state, ttl_seconds, etc)
-  const parsedJob = dynamodbUnmarshall(job);
-  const filteredJob = Object.entries(parsedJob).reduce((acc, [k, v]) => {
-    if (!input.hasOwnProperty(k)) {
-      acc[k] = v;
-    }
-    return acc;
-  }, {});
+  const parsedJob = dynamodbUnmarshall(jobResp.Item);
+  // const filteredJob = filterProps(parsedJob, input.jobStatic);
+
+  const {
+    jobStatic,
+    job,
+  } = splitJobStaticProps(parsedJob)
 
   callback(null, {
     ...input,
-    job: filteredJob,
+    jobStatic,
+    job,
   });
 };

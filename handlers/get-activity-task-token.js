@@ -5,21 +5,14 @@ const {
 } = process.env;
 
 export const handler = async (input, context, callback) => {
-  const startedAt = Date.now();
-
   const {
-    executionKey,
-    executionName,
+    jobExecution: {
+      key: executionKey,
+      name: executionName,
+    },
   } = input;
 
-  const target = {
-    executionKey,
-    executionName,
-  };
-
-  let activity;
-
-  let loop = true;
+  const output = { ...input };
 
   // Note: this request is a long poll that lasts up to 60 seconds
   const {
@@ -38,26 +31,24 @@ export const handler = async (input, context, callback) => {
     console.log(`Received activity task with input: ${JSON.stringify(activityInput, null, 2)}`);
 
     const {
-      executionKey: activityExecutionKey,
-      executionName: activityExecutionName
+      jobExecution: {
+        key: activityExecutionKey,
+        name: activityExecutionName,
+      },
     } = activityInput;
-
-    activity = {
-      taskToken,
-      executionKey: activityExecutionKey,
-    };
 
     const match = activityExecutionName && activityExecutionName === executionName;
 
+    output.awaitCallbackActivity = {
+      taskToken,
+      jobExecutionKey: activityExecutionKey,
+    };
+
     if (match) {
       console.log(`Received taskToken for the invoking execution`);
-      loop = false;
+      output.jobExecution.awaitCallbackTaskToken = taskToken;
     }
   }
 
-  callback(null, {
-    target,
-    activity,
-    loop,
-  });
+  callback(null, output);
 }

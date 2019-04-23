@@ -9,11 +9,23 @@ const {
 export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
 
-  const { eventId } = input;
+  const {
+    event: {
+      id: eventId,
+      time: eventTime,
+    },
+    jobStatic: {
+      serviceName,
+      jobName,
+    },
+    jobExecution: {
+      name: jobExecutionName,
+    },
+  } = input;
 
   const partitionKey = getPartitionKey(eventId, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
-  const sortKey = getSortKey(input);
-  const now = Date.now();
+  const sortKey = getSortKey(serviceName, jobName, eventTime, eventId);
+  const now = parseInt(Date.now() / 1000);
 
   const executionKey = {
     partitionKey,
@@ -27,8 +39,9 @@ export const handler = async (input, context, callback) => {
         '#SORT': 'sortKey',
       },
       Item: dynamodbMarshall({
-        ...input,
+        event: input.event,
         ...executionKey,
+        name: jobExecutionName,
         insertedAt: now,
         updatedAt: now,
       }),
@@ -44,8 +57,13 @@ export const handler = async (input, context, callback) => {
   //   return;
   // }
 
-  callback(null, {
+  const output = {
     ...input,
-    executionKey,
-  });
+  };
+
+  output.jobExecution.key = executionKey;
+  delete output.jobExecution.partitionKey;
+  delete output.jobExecution.sortKey;
+
+  callback(null, output);
 }

@@ -1,4 +1,4 @@
-import { lambda, stepfunctions } from '../lib/aws_clients';
+import { stepfunctions } from '../lib/aws_clients';
 
 const {
   STATE_MACHINE_ARN_EXECUTE_JOB,
@@ -13,8 +13,12 @@ export const handler = async (input, context, callback) => {
   console.log(`event: ` + JSON.stringify(input, null, 2));
 
   const {
-    eventId,
-    jobGuid,
+    event: {
+      id: eventId,
+    },
+    jobStatic: {
+      guid: jobGuid,
+    },
   } = input;
 
   const executionName = `${jobGuid}--${eventId}`;
@@ -22,8 +26,10 @@ export const handler = async (input, context, callback) => {
   const { executionArn } = await stepfunctions.startExecution({
     stateMachineArn: STATE_MACHINE_ARN_EXECUTE_JOB,
     input: JSON.stringify({
-      executionName,
-      ...input
+      jobExecution: {
+        name: executionName,
+      },
+      ...input,
     }),
     name: executionName,
   }).promise();

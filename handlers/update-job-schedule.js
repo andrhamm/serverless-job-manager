@@ -1,13 +1,10 @@
 import { cloudwatchevents, dynamodbUnmarshall } from '../lib/aws_clients';
 
 const {
-  // LAMBDA_ARN_START_EXECUTION_WITH_EVENT,
-  // STATE_MACHINE_ARN_EXECUTE_JOB,
   CLOUDWATCH_EVENTS_RULE_PREFIX,
   IAM_ROLE_ARN_CLOUDWATCH_EVENTS,
   SERVICE_NAME,
   STATE_MACHINE_ARN_QUEUE_JOB_EXECUTION,
-  // SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS,
 } = process.env;
 
 // TODO: make this a step function!
@@ -42,9 +39,6 @@ export const handler = async (input, context, callback) => {
 
   const ruleName = `${CLOUDWATCH_EVENTS_RULE_PREFIX}${jobGuid}`;
   const targetId = 'StateMachineQueueJobExecution';
-  // const targetId = 'StateMachineExecuteJobExecution';
-  // const targetId = 'LambdaFunctionStartJobExecution';
-  // const targetId = 'SqsFifoQueueJobExecutionEvents';
 
   const listRulesResp = await cloudwatchevents.listRules({
     NamePrefix: ruleName,
@@ -54,19 +48,12 @@ export const handler = async (input, context, callback) => {
 
   const existingRule = listRulesResp.Rules.find(r => r.Name === ruleName);
 
-  // const listTargestsResp = await cloudwatchevents.listTargetsByRule({
-  //   Rule: ruleName,
-  // }).promise();
-  //
-  // console.log(`listTargestsResp response: ` + JSON.stringify(listTargestsResp, null, 2));
-
   if (record.eventName === 'INSERT' || record.eventName === 'MODIFY') {
     let putResp;
     try {
       putResp = await cloudwatchevents.putRule({
         Name: ruleName,
         Description: `Schedule for ${SERVICE_NAME} ${serviceName} ${jobName}`,
-        // RoleArn: IAM_ROLE_ARN_CLOUDWATCH_EVENTS, // TODO: verify if this is needed... ??
         ScheduleExpression: newImage.schedule,
         State: newImage.enabled ? 'ENABLED' : 'DISABLED',
       }).promise();
@@ -77,29 +64,39 @@ export const handler = async (input, context, callback) => {
 
     const inputPathsMap = {
       // can define a max of 10 of these...
-      eventId: "$.id",
-      eventTime: "$.time",
-      eventAccount: "$.account",
-      eventRegion: "$.region",
+      id: "$.id",
+      time: "$.time",
+      account: "$.account",
+      region: "$.region",
       ruleArn: "$.resources[0]",
     };
 
-    let inputTemplate = Object.keys(inputPathsMap).reduce((template, key) => {
-      return `${template}"${key}":<${key}>,`;
-    }, "");
+    const eventParts = Object.keys(inputPathsMap).reduce((parts, key) => {
+      parts.push(`"${key}":<${key}>`);
+      return parts;
+    }, []);
 
-    inputTemplate += `"ruleName":"${ruleName}",`;
-    inputTemplate += `"ruleSchedule":"${newImage.schedule}",`;
-    inputTemplate += `"invocationType":"${newImage.invocationType}",`;
-    inputTemplate += `"invocationTarget":"${newImage.invocationTarget}",`;
-    inputTemplate += `"ttlSeconds": ${newImage.ttlSeconds},`
-    inputTemplate += `"exclusive": ${newImage.exclusive ? 'true' : 'false'},`;
-    inputTemplate += `"async": ${newImage.async ? 'true' : 'false'},`;
-    inputTemplate += `"jobName":"${jobName}",`;
-    inputTemplate += `"serviceName":"${serviceName}",`;
-    inputTemplate += `"sqsMessageGroupId":"${sqsMessageGroupId}",`;
-    inputTemplate += `"jobGuid":"${jobGuid}",`;
-    inputTemplate += `"payload":${JSON.stringify(newImage.payload)}`;
+    let inputTemplate = `"event":{${eventParts.join(',')}},`;
+
+    inputTemplate += `"jobStatic":{`
+      inputTemplate += `"async": ${newImage.async ? 'true' : 'false'},`;
+      inputTemplate += `"exclusive": ${newImage.exclusive ? 'true' : 'false'},`;
+      inputTemplate += `"guid":"${jobGuid}",`;
+      inputTemplate += `"invocationTarget":"${newImage.invocationTarget}",`;
+      inputTemplate += `"invocationType":"${newImage.invocationType}",`;
+      inputTemplate += `"jobName":"${jobName}",`;
+      inputTemplate += `"key":{"jobName":"${jobName}","serviceName":"${serviceName}"},`,
+      inputTemplate += `"payload":${JSON.stringify(newImage.payload)},`;
+      inputTemplate += `"ruleName":"${ruleName}",`;
+      inputTemplate += `"ruleSchedule":"${newImage.schedule}",`;
+      inputTemplate += `"serviceName":"${serviceName}",`;
+      inputTemplate += `"ttlSeconds": ${newImage.ttlSeconds}`,
+    inputTemplate += `},` // job
+
+    inputTemplate += `"sqs":{`
+      inputTemplate += `"messageGroupId":"${sqsMessageGroupId}"`;
+    inputTemplate += `}` // sqs
+
     inputTemplate = `{${inputTemplate}}`;
 
     console.log(`inputTemplate: ${inputTemplate}`);
@@ -110,13 +107,7 @@ export const handler = async (input, context, callback) => {
         {
           Id: targetId,
           Arn: STATE_MACHINE_ARN_QUEUE_JOB_EXECUTION,
-          // Arn: STATE_MACHINE_ARN_QUEUE_JOB,
-          // Arn: LAMBDA_ARN_START_EXECUTION_WITH_EVENT,
-          // Arn: SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS,
           RoleArn: IAM_ROLE_ARN_CLOUDWATCH_EVENTS,
-          // SqsParameters: {
-          //   MessageGroupId: sqsMessageGroupId
-          // },
           InputTransformer: {
             InputPathsMap: inputPathsMap,
             InputTemplate: inputTemplate,

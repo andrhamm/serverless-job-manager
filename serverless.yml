@@ -29,6 +29,7 @@ provider:
         - states:StartExecution
       Resource:
         - Ref: ExecuteJobExecution
+        - Ref: ExecutionCallback
     - Effect: Allow
       Action:
         - states:sendTaskSuccess
@@ -87,7 +88,6 @@ provider:
         - lambda:InvokeFunction
       Resource:
         - ${self:custom.arn_prefix_lambda_function}-startExecutionWithEvent
-        - ${self:custom.arn_prefix_lambda_function}-pollActivityTaskTokens
 
 plugins:
   # - serverless-iam-roles-per-function
@@ -126,8 +126,8 @@ functions:
   startExecutionWithEvent:
     handler: handlers/start-execution-with-event.handler
     description: Lambda that receives the execution event starts the state machine execution.
-  getJobByGuid:
-    handler: handlers/get-job-by-guid.handler
+  getJobKeyByGuid:
+    handler: handlers/get-job-key-by-guid.handler
   getJobLock:
     description: For exclusive jobs, locks the job record and passes job attributes to next task
     handler: handlers/get-job-lock.handler
@@ -148,19 +148,9 @@ functions:
           - ""
           - - Ref: ApiGatewayRestApi
             - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
-  # pollActivityTaskTokens:
-  #   handler: handlers/poll-activity-task-tokens.handler
-  #   description: Lambda that polls StepFunctions for the AwaitCallback activity task token and writes them to DynamoDb
-  #   reservedConcurrency: 10
-  #   timeout: 85 # TODO: tune this
-  #   environment:
-  #     POLL_TIMEOUT_SECONDS: 65
-  #     STEP_FUNCTION_ACTIVITY_ARN_AWAIT_CALLBACK: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
-  # launchActivityWorker:
-  #   handler: handlers/launch-activity-worker.handler
-  #   description: Lambda that launches the activity woker asynchronously
-  #   environment:
-  #     LAMBDA_ARN_POLL_ACTIVITY_TASK_TOKENS: ${self:resources.Outputs.PollActivityTaskTokensLambdaFunctionARN.Value}
+  updateExecutionStatus:
+    handler: handlers/update-execution-status.handler
+    description: Lambda that calls updates the task status for the AwaitCallback activity
   getActivityTaskToken:
     handler: handlers/get-activity-task-token.handler
     description: Attempts to retrieve the activity task token
@@ -202,9 +192,22 @@ functions:
       - http:
           path: services/{serviceName}/jobs/{jobName}
           method: delete
-  updateExecutionStatus:
-    handler: handlers/api/update-execution-status.handler
-    description: Endpoint for services to call with job results
+  serviceExecutionCallback:
+    handler: handlers/api/service-execution-callback.handler
+    description: Endpoint for services to call with job results, starts and execution of the ExecutionCallback state machine
+    environment:
+      STATE_MACHINE_ARN_EXECUTION_CALLBACK: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
+    events:
+      - http:
+          path: callback/{jobGuid}/{encodedExecutionKey}
+          method: post
+          # request:
+          #   template:
+          #     application/json: |
+          #       {
+          #         "stateMachineArn":"arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:executionCallback",
+          #         "input" : "{\"body\":\"$input.body\",\"pathParameters\": { \"jobGuid\": \"$input.params('jobGuid')\", \"encodedJobExecutionKey\": \"$input.params('encodedExecutionKey')\" }}"
+          #       }
   mockHttpInvokeTarget:
     handler: handlers/api/mock-http-invoke-target.handler
     description: Endpoint for testing HTTP invoke target
@@ -241,9 +244,9 @@ stepFunctions:
             Parameters:
               QueueUrl: https://sqs.#{AWS::Region}.amazonaws.com/#{AWS::AccountId}/${self:custom.sqs_fifo_queue_name_job_execution_events}
               MessageBody.$: "$"
-              MessageGroupId.$: "$.sqsMessageGroupId"
-              MessageDeduplicationId.$: "$.eventId"
-            ResultPath: "$.sqs"
+              MessageGroupId.$: "$.sqs.messageGroupId"
+              MessageDeduplicationId.$: "$.event.id"
+            ResultPath: "$.sqs.message"
             Next: WorkExecutionQueue
           WorkExecutionQueue:
             Type: Task
@@ -276,10 +279,10 @@ stepFunctions:
           GetLockIfExclusive:
             Type: Choice
             Choices:
-              - Variable: "$.exclusive"
+              - Variable: "$.jobStatic.exclusive"
                 BooleanEquals: true
                 Next: GetJobLock
-              - Variable: "$.exclusive"
+              - Variable: "$.jobStatic.exclusive"
                 BooleanEquals: false
                 Next: GetJob
           GetJobLock:
@@ -294,10 +297,6 @@ stepFunctions:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-insertJobExecution
             Next: Callback
-          # LaunchActivityWorker:
-          #   Type: Task
-          #   Resource: ${self:custom.arn_prefix_lambda_function}-launchActivityWorker
-          #   Next: Callback
           Callback:
             Type: Parallel
             Next: FinishCallback
@@ -306,6 +305,7 @@ stepFunctions:
                 States:
                   AwaitCallback:
                     Type: Task
+                    Comment: Activity state that waits for the service to callback with job result
                     Resource: arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
                     HeartbeatSeconds: 60
                     End: true
@@ -313,53 +313,49 @@ stepFunctions:
                 States:
                   DelayForActivityStart:
                     Type: Wait
-                    Seconds: 3
+                    Comment: This may not be necessary
+                    Seconds: 1
                     Next: GetActivityTaskToken
-                  # LaunchActivityWorker:
-                  #   Type: Task
-                  #   Resource: ${self:custom.arn_prefix_lambda_function}-launchActivityWorker
-                  #   Next: InvokeServiceExecution
                   GetActivityTaskToken:
                     Type: Task
+                    Comment: Task state function that polls once for an activity task token for the AwaitCallback activity
                     Resource: ${self:custom.arn_prefix_lambda_function}-getActivityTaskToken
                     Next: InsertActivityTaskToken
                   InsertActivityTaskToken:
                     Type: Task
+                    Comment: If an activity task token was found, it is inserted onto the job execution record in DynamoDB
                     Resource: ${self:custom.arn_prefix_lambda_function}-insertActivityTaskToken
                     Next: LoopGetActivityTaskToken
                   LoopGetActivityTaskToken:
                     Type: Choice
+                    Comment: Loops until the activity task token was found for the target job execution
+                    Default: GetOutOfBandActivityTaskToken
                     Choices:
-                      - Variable: "$.loop"
-                        BooleanEquals: true
-                        Next: GetActivityTaskToken
-                      - Variable: "$.loop"
-                        BooleanEquals: false
+                      - Variable: "$.jobExecution.awaitCallbackTaskToken"
+                        StringGreaterThan: ""
                         Next: InvokeServiceExecution
+                  GetOutOfBandActivityTaskToken:
+                    Type: Task
+                    Comment: Checks if the activity task token was found by an out of band task function
+                    Resource: arn:aws:states:::dynamodb:getItem
+                    Parameters:
+                      TableName: ${self:custom.dynamodb_table_name_job_executions}
+                      Key.$: $.awaitCallbackActivity.jobExecutionKey
+                    ResultPath: $.jobExecution.callbackTaskToken
+                    OutputPath: $.Item.awaitCallbackTaskToken.S
+                    Next: LoopGetActivityTaskToken
                   InvokeServiceExecution:
                     Type: Task
                     Resource: ${self:custom.arn_prefix_lambda_function}-invokeServiceExecution
-                    InputPath: "$.jobExecution"
                     End: true
           FinishCallback:
             # Type: Task
             # Resource: ${self:custom.arn_prefix_lambda_function}-finishCallback
             Type: Pass
             End: true
+
     executionCallbackStepFunction:
       name: executionCallback
-      events:
-        - http:
-            path: callback/{jobGuid}/{encodedExecutionKey}
-            method: post
-            request:
-              template:
-                application/json: |
-                  #set( $body = $util.escapeJavaScript($input.json('$')) )
-                  {
-                    "stateMachineArn":"arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:executionCallback",
-                    "input" : "{\"pathParameters\": { \"jobGuid\": \"$input.params('jobGuid')\", \"encodedExecutionKey\": \"$input.params('encodedExecutionKey')\" }}"
-                  }
       definition:
         Comment: Processes the results of a service's job execution
         StartAt: GetJobAndExecution
@@ -368,11 +364,15 @@ stepFunctions:
             Type: Parallel
             Next: UpdateExecutionStatus
             Branches:
-              - StartAt: GetJobByGuid
+              - StartAt: GetJobKeyByGuid
                 States:
-                  GetJobByGuid:
+                  GetJobKeyByGuid:
                     Type: Task
-                    Resource: ${self:custom.arn_prefix_lambda_function}-getJobByGuid
+                    Resource: ${self:custom.arn_prefix_lambda_function}-getJobKeyByGuid
+                    Next: GetJob
+                  GetJob:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-getJob
                     End: true
               - StartAt: GetJobExecutionByExecutionKey
                 States:
@@ -398,12 +398,13 @@ resources:
       Description: The ARN of the QueueJobExecution state machine
       Value:
         Ref: QueueJobExecution
+    ExecutionCallbackStateMachineARN:
+      Description: The ARN of the ExecutionCallback state machine
+      Value:
+        Ref: ExecutionCallback
     StartExecutionWithEventLambdaFunctionARN:
       Value:
         Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
-    # PollActivityTaskTokensLambdaFunctionARN:
-    #   Value:
-    #     Fn::GetAtt: [ PollActivityTaskTokensLambdaFunction, Arn ]
   Resources:
     JobExecutionEventsFifoSqsQueue:
       Type: AWS::SQS::Queue # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sqs-queues.html
