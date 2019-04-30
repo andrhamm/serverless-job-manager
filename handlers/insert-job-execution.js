@@ -37,7 +37,7 @@ export const handler = async (input, context, callback) => {
   const timeMs = (new Date(eventTime)).getTime();
 
   // try {
-    const { Attributes: jobExecution } = await dynamodb.putItem({
+    await dynamodb.putItem({
       TableName: DYNAMODB_TABLE_NAME_JOB_EXECUTIONS,
       ExpressionAttributeNames: {
         '#SORT': 'sortKey',
@@ -47,17 +47,13 @@ export const handler = async (input, context, callback) => {
           ...event,
           timeMs,
         },
-        jobStatic: {
-          serviceName,
-          jobName,
-        },
         ...executionKey,
         name: jobExecutionName,
         insertedAt: now,
         updatedAt: now,
       }),
       ConditionExpression: "attribute_not_exists(#SORT)",
-      ReturnValues: 'ALL_NEW',
+      // ReturnValues only supports ALL_OLD or NONE for putItem
     }).promise();
   // } catch (e) {
     // TODO: add error catching to the step function config
@@ -73,12 +69,9 @@ export const handler = async (input, context, callback) => {
     ...input,
   };
 
-  output.jobExecution = {
-    ...output.jobExecution,
-    ...dynamodbUnmarshall(jobExecution),
-    key: executionKey,
-  };
-
+  output.jobExecution.key = executionKey;
+  output.jobExecution.event.timeMs = timeMs;
+  
   delete output.jobExecution.partitionKey;
   delete output.jobExecution.sortKey;
 
