@@ -196,6 +196,12 @@ functions:
   searchJobs:
     handler: handlers/api/search-jobs.handler
     description: Read endpoint for jobs
+    environment:
+      API_BASE:
+        Fn::Join:
+          - ""
+          - - Ref: ApiGatewayRestApi
+            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     events:
       - http:
           path: jobs
@@ -203,9 +209,21 @@ functions:
       - http:
           path: services/{serviceName}/jobs
           method: get
+      - http:
+          path: jobs
+          method: post
+      - http:
+          path: services/{serviceName}/jobs
+          method: post
   searchJobExecutions:
     handler: handlers/api/search-job-executions.handler
     description: Read endpoint for job executions
+    environment:
+      API_BASE:
+        Fn::Join:
+          - ""
+          - - Ref: ApiGatewayRestApi
+            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     events:
       - http:
           path: executions
@@ -216,6 +234,15 @@ functions:
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: get
+      - http:
+          path: executions
+          method: post
+      - http:
+          path: services/{serviceName}/executions
+          method: post
+      - http:
+          path: services/{serviceName}/jobs/{jobName}/executions
+          method: post
   putJob:
     handler: handlers/api/put-job.handler
     description: Idempotent job create/update

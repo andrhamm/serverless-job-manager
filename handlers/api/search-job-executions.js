@@ -1,6 +1,6 @@
 import PQueue from 'p-queue';
 import { dynamodb, dynamodbMarshall, dynamodbUnmarshall } from '../../lib/aws_clients';
-import { getIndexDateFields, getSortKeyPrefix, getAllPartitionKeys, getCommonPrefix, parseSortKey } from '../../lib/job_executions_utils';
+import { getIndexDateFields, getSortKeyPrefix, getAllPartitionKeys, getCommonPrefix, parseSortKey, genericEncode, genericDecode } from '../../lib/job_executions_utils';
 import { paginatedMultiPartitionQuery } from '../../lib/dynamodb_utils';
 import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
@@ -17,25 +17,40 @@ export const handler = async (input, context, callback) => {
     pathParameters,
     multiValueQueryStringParameters,
     queryStringParameters,
+    body: bodyJson,
   } = input;
 
+  const body = camelCaseObj(JSON.parse(bodyJson || '{}'));
   const params = camelCaseObj(queryStringParameters || {});
   const multiParams = camelCaseObj(multiValueQueryStringParameters || {});
-  const {
+  let {
     since,
     serviceName,
     jobName,
   } = params;
+  let exclusiveStartKeys;
+
+  if (body.more) {
+    const decodedMore = genericDecode(body.more);
+
+    console.log(`body.more=${body.more} decodedMore=${JSON.stringify(decodedMore)}`);
+    ({s: since, sn: serviceName, j: jobName, c: exclusiveStartKeys} = decodedMore);
+  }
 
   const sinceDt = since ? new Date(since) : null;
-  const [indexDate, indexStartMs] = getIndexDateFields(sinceDt);
+  const [indexDateStr, indexStartMs, indexDate] = getIndexDateFields(sinceDt);
+
+  // const [ nextIndexDateStr, nextIndexStartMs ] = getIndexDateFields(indexDate, 1);
+  const [ prevIndexDateStr, prevIndexStartMs ] = getIndexDateFields(indexDate, -1);
+
   const sinceMs = sinceDt ? sinceDt.getTime() : indexStartMs;
 
   const eventTimePrefix = indexStartMs === sinceMs ? null : getCommonPrefix(indexStartMs, sinceMs);
   const sortKeyPrefix = getSortKeyPrefix(serviceName, jobName, eventTimePrefix);
 
-  console.log(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}`);
-  const partitionKeys = getAllPartitionKeys(indexDate, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
+  console.log(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}, exclusiveStartKeys=${exclusiveStartKeys}`);
+  const allPartitionKeys = getAllPartitionKeys(indexDateStr, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
+  const partitionKeys = exclusiveStartKeys ? Object.keys(exclusiveStartKeys).filter((v) => allPartitionKeys.include(v)) : allPartitionKeys;
 
   console.log(`partitionKeys (${DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS}): ${JSON.stringify(partitionKeys)}`);
 
@@ -58,7 +73,7 @@ export const handler = async (input, context, callback) => {
     // TODO: add filter expression for date filtering
     // FilterExpression: '#eventTimeMs >= :sinceMs',
     KeyConditionExpression: keyCondition,
-    ProjectionExpression: '#name, event, #result, updatedAt, insertedAt, sortKey'
+    ProjectionExpression: '#name, event, #result, updatedAt, insertedAt, sortKey',
   };
 
   const expressionAttributeValuesArray = partitionKeys.map((partitionKey) => {
@@ -69,13 +84,29 @@ export const handler = async (input, context, callback) => {
 
   const {
     results,
-    pagingState,
-  } = await paginatedMultiPartitionQuery(queryParams, expressionAttributeValuesArray, ':partitionKey');
+    pagingState: {
+      lastEvalKeys
+    },
+  } = await paginatedMultiPartitionQuery(queryParams, expressionAttributeValuesArray, ':partitionKey', exclusiveStartKeys);
+
+  let moreParams = {
+    s: since,
+    sn: serviceName,
+    j: jobName,
+  };
+
+  if (Object.values(lastEvalKeys).filter((v) => v).length > 0) {
+    moreParams.c = lastEvalKeys;
+  } else {
+    moreParams.s = prevIndexStartMs;
+  }
 
   const response = {
     count: results.length,
     since: sinceMs,
-    pagingState,
+    paging: {
+      more: genericEncode(moreParams),
+    },
     // TODO: filter response
     results: results.map(dynamodbUnmarshall).map((result) => {
       // polyfill jobName and serviceName (remove later)
