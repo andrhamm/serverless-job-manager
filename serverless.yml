@@ -32,7 +32,7 @@ provider:
         - Ref: ExecutionCallback
     - Effect: Allow
       Action:
-        - states:sendTaskSuccess
+        - states:sendTask*
       Resource:
         - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
     - Effect: Allow
@@ -49,15 +49,11 @@ provider:
         - dynamodb:GetItem
         - dynamodb:PutItem
         - dynamodb:UpdateItem
+        - dynamodb:Scan
+        - dynamodb:Query
       Resource:
         - Fn::GetAtt: [ JobsDynamoDbTable, Arn ]
         - Fn::GetAtt: [ JobExecutionsDynamoDbTable, Arn ]
-    - Effect: Allow
-      Action:
-        - sqs:ReceiveMessage
-        - sqs:DeleteMessage
-      Resource:
-        - arn:aws:sqs:#{AWS::Region}:#{AWS::AccountId}:${self:custom.sqs_fifo_queue_name_job_execution_events}
     - Effect: Allow
       Action:
         - dynamodb:Query
@@ -66,6 +62,12 @@ provider:
             - ""
             - - Fn::GetAtt: [ JobsDynamoDbTable, Arn ]
               - "/index/${self:custom.dynamodb_index_name_jobs_guid}"
+    - Effect: Allow
+      Action:
+        - sqs:ReceiveMessage
+        - sqs:DeleteMessage
+      Resource:
+        - arn:aws:sqs:#{AWS::Region}:#{AWS::AccountId}:${self:custom.sqs_fifo_queue_name_job_execution_events}
     - Effect: Allow
       Action:
         - events:RemoveTargets
@@ -88,21 +90,25 @@ provider:
         - lambda:InvokeFunction
       Resource:
         - ${self:custom.arn_prefix_lambda_function}-startExecutionWithEvent
+        - ${self:custom.arn_prefix_lambda_function}-mockDelayedServiceExecutionCallback
 
 plugins:
   # - serverless-iam-roles-per-function
   - serverless-pseudo-parameters
   - serverless-step-functions
   - serverless-webpack
+  # - serverless-tag-cloud-watch-logs
 
 custom:
-  version: 2
   webpack:
     webpackConfig: ./webpack.config.js
     includeModules:
       forceExclude:
         - aws-sdk
     packager: npm
+  cloudWatchLogsTags:
+    DisableForwarding: "true"
+
   arn_prefix_lambda_function: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}
   # serverless-iam-roles-per-function:
   #   defaultInherit: true
@@ -113,6 +119,7 @@ custom:
   sqs_fifo_queue_name_job_execution_events: ${self:service.name}-${self:provider.stage}-job-execution-events.fifo
   iam_role_name_cloudwatch_events: ${self:service.name}-${self:provider.stage}-cloudwatchevents
   step_function_activity_name_await_callback: ${self:service.name}-${self:provider.stage}-awaitCallback
+
 functions:
   # Step function task handlers
   workExecutionQueue:
@@ -123,6 +130,10 @@ functions:
       SQS_QUEUE_URL_JOB_EXECUTION_EVENTS:
         Ref: JobExecutionEventsFifoSqsQueue
       LAMBDA_ARN_START_EXECUTION_WITH_EVENT: ${self:resources.Outputs.StartExecutionWithEventLambdaFunctionARN.Value}
+  mockDelayedServiceExecutionCallback:
+    handler: handlers/mock-delayed-service-execution-callback.handler
+    description: Posts to the callback endpoint after a random delay
+    timeout: 10
   startExecutionWithEvent:
     handler: handlers/start-execution-with-event.handler
     description: Lambda that receives the execution event starts the state machine execution.
@@ -148,8 +159,8 @@ functions:
           - ""
           - - Ref: ApiGatewayRestApi
             - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
-  updateExecutionStatus:
-    handler: handlers/update-execution-status.handler
+  updateAwaitCallbackActivityStatus:
+    handler: handlers/update-await-callback-activity-status.handler
     description: Lambda that calls updates the task status for the AwaitCallback activity
   getActivityTaskToken:
     handler: handlers/get-activity-task-token.handler
@@ -160,6 +171,10 @@ functions:
   insertActivityTaskToken:
     handler: handlers/insert-activity-task-token.handler
     timeout: 30 # allow time for retries
+  updateJobWithExecutionResults:
+    handler: handlers/update-job-with-execution-results.handler
+  updateJobExecutionWithResults:
+    handler: handlers/update-job-execution-with-execution-results.handler
 
   # DynamoDB Stream handlers
   updateJobSchedule:
@@ -178,6 +193,29 @@ functions:
           batchSize: 1
 
   # API handlers
+  searchJobs:
+    handler: handlers/api/search-jobs.handler
+    description: Read endpoint for jobs
+    events:
+      - http:
+          path: jobs
+          method: get
+      - http:
+          path: services/{serviceName}/jobs
+          method: get
+  searchJobExecutions:
+    handler: handlers/api/search-job-executions.handler
+    description: Read endpoint for job executions
+    events:
+      - http:
+          path: executions
+          method: get
+      - http:
+          path: services/{serviceName}/executions
+          method: get
+      - http:
+          path: services/{serviceName}/jobs/{jobName}/executions
+          method: get
   putJob:
     handler: handlers/api/put-job.handler
     description: Idempotent job create/update
@@ -199,18 +237,13 @@ functions:
       STATE_MACHINE_ARN_EXECUTION_CALLBACK: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
     events:
       - http:
-          path: callback/{jobGuid}/{encodedExecutionKey}
+          path: callback/{jobGuid}/{encodedJobExecutionKey}
           method: post
-          # request:
-          #   template:
-          #     application/json: |
-          #       {
-          #         "stateMachineArn":"arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:executionCallback",
-          #         "input" : "{\"body\":\"$input.body\",\"pathParameters\": { \"jobGuid\": \"$input.params('jobGuid')\", \"encodedJobExecutionKey\": \"$input.params('encodedExecutionKey')\" }}"
-          #       }
   mockHttpInvokeTarget:
     handler: handlers/api/mock-http-invoke-target.handler
     description: Endpoint for testing HTTP invoke target
+    environment:
+      LAMBDA_ARN_MOCK_DELAYED_CALLBACK: ${self:resources.Outputs.MockDelayedServiceExecutionCallbackLambdaFunctionARN.Value}
     events:
       - http:
           path: http-invoke
@@ -245,7 +278,7 @@ stepFunctions:
               QueueUrl: https://sqs.#{AWS::Region}.amazonaws.com/#{AWS::AccountId}/${self:custom.sqs_fifo_queue_name_job_execution_events}
               MessageBody.$: "$"
               MessageGroupId.$: "$.sqs.messageGroupId"
-              MessageDeduplicationId.$: "$.event.id"
+              MessageDeduplicationId.$: "$.jobExecution.event.id"
             ResultPath: "$.sqs.message"
             Next: WorkExecutionQueue
           WorkExecutionQueue:
@@ -288,6 +321,12 @@ stepFunctions:
           GetJobLock:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-getJobLock
+            Retry:
+            - ErrorEquals:
+              - ConditionalCheckFailedException
+              IntervalSeconds: 2
+              MaxAttempts: 2
+              BackoffRate: 2
             Next: InsertJobExecution
           GetJob:
             Type: Task
@@ -349,8 +388,22 @@ stepFunctions:
                     Resource: ${self:custom.arn_prefix_lambda_function}-invokeServiceExecution
                     End: true
           FinishCallback:
-            # Type: Task
-            # Resource: ${self:custom.arn_prefix_lambda_function}-finishCallback
+            Type: Parallel
+            Next: EndExecution
+            Branches:
+              - StartAt: UpdateJobWithExecutionResults
+                States:
+                  UpdateJobWithExecutionResults:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-updateJobWithExecutionResults
+                    End: true
+              - StartAt: UpdateJobExecutionWithExecutionResults
+                States:
+                  UpdateJobExecutionWithExecutionResults:
+                    Type: Task
+                    Resource: ${self:custom.arn_prefix_lambda_function}-updateJobExecutionWithResults
+                    End: true
+          EndExecution:
             Type: Pass
             End: true
 
@@ -362,7 +415,7 @@ stepFunctions:
         States:
           GetJobAndExecution:
             Type: Parallel
-            Next: UpdateExecutionStatus
+            Next: UpdateAwaitCallbackActivityStatus
             Branches:
               - StartAt: GetJobKeyByGuid
                 States:
@@ -380,9 +433,9 @@ stepFunctions:
                     Type: Task
                     Resource: ${self:custom.arn_prefix_lambda_function}-getJobExecutionByExecutionKey
                     End: true
-          UpdateExecutionStatus:
+          UpdateAwaitCallbackActivityStatus:
             Type: Task
-            Resource: ${self:custom.arn_prefix_lambda_function}-updateExecutionStatus
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateAwaitCallbackActivityStatus
             End: true
 
   activities:
@@ -405,6 +458,9 @@ resources:
     StartExecutionWithEventLambdaFunctionARN:
       Value:
         Fn::GetAtt: [ StartExecutionWithEventLambdaFunction, Arn ]
+    MockDelayedServiceExecutionCallbackLambdaFunctionARN:
+      Value:
+        Fn::GetAtt: [ MockDelayedServiceExecutionCallbackLambdaFunction, Arn ]
   Resources:
     JobExecutionEventsFifoSqsQueue:
       Type: AWS::SQS::Queue # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-sqs-queues.html

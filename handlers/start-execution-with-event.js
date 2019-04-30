@@ -13,8 +13,10 @@ export const handler = async (input, context, callback) => {
   console.log(`event: ` + JSON.stringify(input, null, 2));
 
   const {
-    event: {
-      id: eventId,
+    jobExecution: {
+      event: {
+        id: eventId,
+      },
     },
     jobStatic: {
       guid: jobGuid,
@@ -23,14 +25,12 @@ export const handler = async (input, context, callback) => {
 
   const executionName = `${jobGuid}--${eventId}`;
 
+  const payload = { ...input };
+  payload.jobExecution.name = executionName;
+
   const { executionArn } = await stepfunctions.startExecution({
     stateMachineArn: STATE_MACHINE_ARN_EXECUTE_JOB,
-    input: JSON.stringify({
-      jobExecution: {
-        name: executionName,
-      },
-      ...input,
-    }),
+    input: JSON.stringify(payload),
     name: executionName,
   }).promise();
 

@@ -1,11 +1,11 @@
-import axios from 'axios';
+import { lambda } from '../../lib/aws_clients';
 import { camelCaseObj } from '../../lib/common';
 
-// const delay = delayMs => new Promise(resolve => setTimeout(resolve, delayMs));
+const {
+  LAMBDA_ARN_MOCK_DELAYED_CALLBACK,
+} = process.env;
 
 export const handler = async (input, context, callback) => {
-  // console.log('event: ' + JSON.stringify(input, null, 2));
-
   const {
     pathParameters,
     body: bodyJson
@@ -15,23 +15,18 @@ export const handler = async (input, context, callback) => {
 
   const body = JSON.parse(bodyJson);
 
-  const {
-    callbackUrl,
-  } = camelCaseObj(body);
+  const { callbackUrl } = camelCaseObj(body);
 
-  // console.log(`Invoking callback after 2 seconds: ${callbackUrl}`);
-  //
-  // await delay(2000)
-
-  const resp = await axios.post(callbackUrl, {});
-
-  console.log(JSON.stringify(resp.data));
+  await lambda.invoke({
+    FunctionName: LAMBDA_ARN_MOCK_DELAYED_CALLBACK,
+    InvocationType: 'Event', // async / fire and forget
+    Payload: JSON.stringify({ callbackUrl }),
+  }).promise();
 
   callback(null,  {
-    statusCode: 202,
+    statusCode: 204,
     headers: {
       'Content-Type': 'application/json'
     },
-    body: bodyJson,
   });
 }

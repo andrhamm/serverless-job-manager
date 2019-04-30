@@ -10,12 +10,9 @@ const {
 } = process.env;
 
 export const handler = async (input, context, callback) => {
+  console.log("test a change");
   console.log('event: ' + JSON.stringify(input, null, 2));
-
   const {
-    event: {
-      time: eventTime,
-    },
     jobStatic: {
       guid: jobGuid,
       invocationTarget,
@@ -27,9 +24,12 @@ export const handler = async (input, context, callback) => {
     },
     jobExecution: {
       key: jobExecutionKey,
+      event: {
+        time: eventTime,
+      },
     },
     job: {
-      previousInvocation,
+      lastSuccessfulExecution,
     },
   } = input;
 
@@ -46,7 +46,7 @@ export const handler = async (input, context, callback) => {
     callbackUrl,
     jobName,
     payload,
-    previousInvocation,
+    lastSuccessfulExecution,
     schedule: ruleSchedule,
     scheduledTime: eventTime,
     scheduledTimeMs,

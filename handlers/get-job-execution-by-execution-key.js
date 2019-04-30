@@ -23,5 +23,9 @@ export const handler = async (input, context, callback) => {
   delete jobExecution.partitionKey;
   delete jobExecution.sortKey;
 
-  callback(null, { jobExecution, result });
+  const output = { ...input, jobExecution };
+  delete output.jobExecutionKey;
+  delete output.jobGuid;
+
+  callback(null, output);
 };

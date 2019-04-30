@@ -76,7 +76,7 @@ export const handler = async (input, context, callback) => {
       return parts;
     }, []);
 
-    let inputTemplate = `"event":{${eventParts.join(',')}},`;
+    let inputTemplate = `"jobExecution":{"event":{${eventParts.join(',')}}},`;
 
     inputTemplate += `"jobStatic":{`
       inputTemplate += `"async": ${newImage.async ? 'true' : 'false'},`;

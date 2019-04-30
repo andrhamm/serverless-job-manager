@@ -1,5 +1,5 @@
 import { stepfunctions } from '../../lib/aws_clients';
-import { decodeEncodedJobExecutionKey, parseSortKey } from '../../lib/job_executions_utils';
+import { decodeEncodedJobExecutionKey, parseSortKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
 
 const {
   STATE_MACHINE_ARN_EXECUTION_CALLBACK
@@ -11,15 +11,16 @@ export const handler = async (input, context, callback) => {
   const {
     pathParameters: {
       jobGuid,
-      encodedExecutionKey: encodedJobExecutionKey,
+      encodedJobExecutionKey,
     },
-    body: bodyJson
+    body: jobExecutionResultJson
   } = input;
 
   // TODO: validate!
-  const body = bodyJson ? JSON.parse(bodyJson) : {};
+  const jobExecutionResult = jobExecutionResultJson ? JSON.parse(jobExecutionResultJson) : {};
+  const filteredJobExecutionResult = filterJobExecutionResult(jobExecutionResult);
 
-  const jobExecutionKey = decodeEncodedJobExecutionKey(encodedJobExecutionKey);
+  const jobExecutionKey = decodeEncodedJobExecutionKey(decodeURIComponent(encodedJobExecutionKey));
 
   const { sortKey } = jobExecutionKey;
 
@@ -32,7 +33,7 @@ export const handler = async (input, context, callback) => {
     input: JSON.stringify({
       jobGuid,
       jobExecutionKey,
-      result: body,
+      jobExecutionResult: filteredJobExecutionResult,
     }),
     name: executionName,
   }).promise();

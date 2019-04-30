@@ -1,4 +1,4 @@
-import { dynamodb, dynamodbMarshall } from '../lib/aws_clients';
+import { dynamodb, dynamodbMarshall, dynamodbUnmarshall } from '../lib/aws_clients';
 import { getPartitionKey, getSortKey } from '../lib/job_executions_utils';
 
 const {
@@ -10,18 +10,20 @@ export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
 
   const {
-    event: {
-      id: eventId,
-      time: eventTime,
-    },
     jobStatic: {
       serviceName,
       jobName,
     },
     jobExecution: {
       name: jobExecutionName,
+      event,
     },
   } = input;
+
+  const {
+    id: eventId,
+    time: eventTime,
+  } = event;
 
   const partitionKey = getPartitionKey(eventId, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
   const sortKey = getSortKey(serviceName, jobName, eventTime, eventId);
@@ -32,20 +34,30 @@ export const handler = async (input, context, callback) => {
     sortKey,
   };
 
+  const timeMs = (new Date(eventTime)).getTime();
+
   // try {
-    await dynamodb.putItem({
+    const { Attributes: jobExecution } = await dynamodb.putItem({
       TableName: DYNAMODB_TABLE_NAME_JOB_EXECUTIONS,
       ExpressionAttributeNames: {
         '#SORT': 'sortKey',
       },
       Item: dynamodbMarshall({
-        event: input.event,
+        event: {
+          ...event,
+          timeMs,
+        },
+        jobStatic: {
+          serviceName,
+          jobName,
+        },
         ...executionKey,
         name: jobExecutionName,
         insertedAt: now,
         updatedAt: now,
       }),
       ConditionExpression: "attribute_not_exists(#SORT)",
+      ReturnValues: 'ALL_NEW',
     }).promise();
   // } catch (e) {
     // TODO: add error catching to the step function config
@@ -61,7 +73,12 @@ export const handler = async (input, context, callback) => {
     ...input,
   };
 
-  output.jobExecution.key = executionKey;
+  output.jobExecution = {
+    ...output.jobExecution,
+    ...dynamodbUnmarshall(jobExecution),
+    key: executionKey,
+  };
+
   delete output.jobExecution.partitionKey;
   delete output.jobExecution.sortKey;
 
