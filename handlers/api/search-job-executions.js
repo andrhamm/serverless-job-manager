@@ -37,26 +37,39 @@ export const handler = async (input, context, callback) => {
     ({s: since, sn: serviceName, j: jobName, c: exclusiveStartKeys} = decodedMore);
   }
 
-  const sinceDt = since ? new Date(since) : null;
-  const [indexDateStr, indexStartMs, indexDate] = getIndexDateFields(sinceDt);
+  let [indexDateStr, indexStartMs, sinceDt, sinceMs] = getIndexDateFields(since ? new Date(parseInt(since)) : null);
 
   // const [ nextIndexDateStr, nextIndexStartMs ] = getIndexDateFields(indexDate, 1);
-  const [ prevIndexDateStr, prevIndexStartMs ] = getIndexDateFields(indexDate, -1);
-
-  const sinceMs = sinceDt ? sinceDt.getTime() : indexStartMs;
+  const [ prevIndexDateStr, prevIndexStartMs ] = getIndexDateFields(sinceDt, -1);
 
   const eventTimePrefix = indexStartMs === sinceMs ? null : getCommonPrefix(indexStartMs, sinceMs);
   const sortKeyPrefix = getSortKeyPrefix(serviceName, jobName, eventTimePrefix);
 
   console.log(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}, exclusiveStartKeys=${exclusiveStartKeys}`);
   const allPartitionKeys = getAllPartitionKeys(indexDateStr, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
-  const partitionKeys = exclusiveStartKeys ? Object.keys(exclusiveStartKeys).filter((v) => allPartitionKeys.include(v)) : allPartitionKeys;
+  const partitionKeys = exclusiveStartKeys ?
+                          Object.keys(exclusiveStartKeys).filter((v) => allPartitionKeys.include(v)) :
+                          allPartitionKeys;
 
   console.log(`partitionKeys (${DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS}): ${JSON.stringify(partitionKeys)}`);
 
+  let attrValues;
+  let filterExpr;
   let keyCondition = "partitionKey = :partitionKey";
   if (sortKeyPrefix) {
      keyCondition += " AND begins_with(sortKey, :sortKeyPrefix)";
+     attrValues = {
+       ':sortKeyPrefix': sortKeyPrefix
+     };
+  }
+
+  if (params.since) {
+    if (!attrValues) {
+      attrValues = {};
+    }
+
+    attrValues[':sinceMs'] = parseInt(sinceMs);
+    filterExpr = 'event.timeMs >= :sinceMs';
   }
 
   const queryParams = {
@@ -64,14 +77,9 @@ export const handler = async (input, context, callback) => {
     ExpressionAttributeNames: {
       '#result': 'result',
       '#name': 'name',
-      // '#eventTimeMs': 'event.timeMs',
     },
-    ExpressionAttributeValues: dynamodbMarshall({
-      // ':sinceMs': parseInt(sinceMs),
-      ...sortKeyPrefix && {':sortKeyPrefix': sortKeyPrefix},
-    }),
-    // TODO: add filter expression for date filtering
-    // FilterExpression: '#eventTimeMs >= :sinceMs',
+    ...attrValues && { ExpressionAttributeValues: dynamodbMarshall(attrValues) },
+    ...filterExpr && { FilterExpression: filterExpr },
     KeyConditionExpression: keyCondition,
     ProjectionExpression: '#name, event, #result, updatedAt, insertedAt, sortKey',
   };
