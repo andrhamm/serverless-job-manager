@@ -1,13 +1,24 @@
 import PQueue from 'p-queue';
 import { dynamodb, dynamodbMarshall, dynamodbUnmarshall } from '../../lib/aws_clients';
-import { getIndexDateFields, getSortKeyPrefix, getAllPartitionKeys, getCommonPrefix, parseSortKey, genericEncode, genericDecode } from '../../lib/job_executions_utils';
+import {
+  genericDecode,
+  genericEncode,
+  getAllPartitionKeys,
+  getCommonPrefix,
+  getIndexDateFields,
+  getSortKeyPrefix,
+  parseSortKey,
+  zipPartitionKeys,
+} from '../../lib/job_executions_utils';
 import { paginatedMultiPartitionQuery } from '../../lib/dynamodb_utils';
 import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
 const {
   DYNAMODB_TABLE_NAME_JOB_EXECUTIONS,
-  DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS,
+  DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS: paritionCountStr,
 } = process.env;
+
+const partitionCount = parseInt(paritionCountStr);
 
 export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
@@ -33,25 +44,29 @@ export const handler = async (input, context, callback) => {
   if (body.more) {
     const decodedMore = genericDecode(body.more);
 
-    console.log(`body.more=${body.more} decodedMore=${JSON.stringify(decodedMore)}`);
+    console.log(`decoded "more": ${JSON.stringify(decodedMore)}`);
     ({s: since, sn: serviceName, j: jobName, c: exclusiveStartKeys} = decodedMore);
   }
 
   let [indexDateStr, indexStartMs, sinceDt, sinceMs] = getIndexDateFields(since ? new Date(parseInt(since)) : null);
 
-  // const [ nextIndexDateStr, nextIndexStartMs ] = getIndexDateFields(indexDate, 1);
+  if (exclusiveStartKeys) {
+    exclusiveStartKeys = zipPartitionKeys(indexDateStr, exclusiveStartKeys);
+  }
+
   const [ prevIndexDateStr, prevIndexStartMs ] = getIndexDateFields(sinceDt, -1);
 
   const eventTimePrefix = indexStartMs === sinceMs ? null : getCommonPrefix(indexStartMs, sinceMs);
   const sortKeyPrefix = getSortKeyPrefix(serviceName, jobName, eventTimePrefix);
 
-  console.log(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}, exclusiveStartKeys=${exclusiveStartKeys}`);
-  const allPartitionKeys = getAllPartitionKeys(indexDateStr, DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS);
+  console.log(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}, exclusiveStartKeys=${JSON.stringify(exclusiveStartKeys,null,2)}`);
+
+  const allPartitionKeys = getAllPartitionKeys(indexDateStr, partitionCount);
   const partitionKeys = exclusiveStartKeys ?
-                          Object.keys(exclusiveStartKeys).filter((v) => allPartitionKeys.include(v)) :
+                          Object.keys(exclusiveStartKeys).filter((partitionKey) => allPartitionKeys.includes(partitionKey)) :
                           allPartitionKeys;
 
-  console.log(`partitionKeys (${DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS}): ${JSON.stringify(partitionKeys)}`);
+  console.log(`partitionKeys (${partitionCount}): ${JSON.stringify(partitionKeys)}`);
 
   let attrValues;
   let filterExpr;
@@ -73,6 +88,7 @@ export const handler = async (input, context, callback) => {
   }
 
   const queryParams = {
+    Limit: 10, // response will contain 0 to 10*partitionCount results per page
     TableName: DYNAMODB_TABLE_NAME_JOB_EXECUTIONS,
     ExpressionAttributeNames: {
       '#result': 'result',

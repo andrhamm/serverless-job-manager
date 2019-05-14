@@ -1,10 +1,19 @@
 import uuidv5 from 'uuid/v5';
-import { dynamodb, dynamodbMarshall, dynamodbUnmarshall } from '../../lib/aws_clients';
-import { camelCaseObj, snakeCaseObj } from '../../lib/common';
+import { cloudwatchevents } from '../lib/aws_clients';
+import { camelCaseObj } from '../lib/common';
+import CustomError from '../lib/errors';
 
 const {
-  DYNAMODB_TABLE_NAME_JOBS,
+  CLOUDWATCH_EVENTS_RULE_PREFIX,
+  SERVICE_NAME,
 } = process.env;
+
+// function BadRequestInvalidScheduleError(message) {
+//     this.name = "BadRequestInvalidScheduleError";
+//     this.message = message;
+//     this.stack = [ "statusCode=400" ];
+// }
+// BadRequestInvalidScheduleError.prototype = new Error();
 
 export const handler = async (input, context, callback) => {
   console.log('event: ' + JSON.stringify(input, null, 2));
@@ -67,53 +76,43 @@ export const handler = async (input, context, callback) => {
   async = !!async;
   exclusive = !!exclusive;
 
-  // schedule: cron(0 12 * * ? *)
-  // payload: "{\"foo\": \"bar\"}"
-  // invocation_type: http
-  // invocation_target: http://poi-serv/v1/job_webhooks
-  // async: true
-  // enabled: true
-  // exclusive: true
-
   // deterministic uuid
   const guid = uuidv5([serviceName, jobName].join('--'), uuidv5.URL);
-  const deletedAt = null;
+  const ruleName = `${CLOUDWATCH_EVENTS_RULE_PREFIX}${guid}`;
 
+  let ruleArn;
   try {
-    await dynamodb.putItem({
-      TableName: DYNAMODB_TABLE_NAME_JOBS,
-      Item: dynamodbMarshall({
-        serviceName,
-        jobName,
-        guid,
-        ttlSeconds,
-        invocationType,
-        invocationTarget,
-        payload,
-        schedule,
-        async,
-        enabled,
-        exclusive,
-        deletedAt,
-      })
-    }).promise();
+    ({ RuleArn: ruleArn } = await cloudwatchevents.putRule({
+      Description: `Schedule for ${SERVICE_NAME} ${serviceName} ${jobName}`,
+      Name: ruleName,
+      ScheduleExpression: schedule,
+      State: enabled ? 'ENABLED' : 'DISABLED',
+    }).promise());
   } catch (e) {
-    callback(e);
-    return;
+    console.log(e);
+    if (e.code && e.code === 'ValidationException' && e.message.includes('Parameter ScheduleExpression is not valid')) {
+      // const error = new BadRequestInvalidScheduleError("Schedule is not a valid schedule expression");
+      const error = new CustomError("Schedule is not a valid schedule expression", {statusCode: 400, code: 'InvalidSchedule'});
+      callback(error);
+      return;
+    }
+
+    throw e;
   }
 
-  const job = await dynamodb.getItem({
-    TableName: DYNAMODB_TABLE_NAME_JOBS,
-    ConsistentRead: true,
-    Key: dynamodbMarshall({
-      serviceName,
-      jobName,
-    }),
-  }).promise();
-
-  callback(null,  {
-    statusCode: 201,
-    headers,
-    body: JSON.stringify(snakeCaseObj(dynamodbUnmarshall(job.Item)), null, 2),
+  callback(null, {
+    async,
+    enabled,
+    exclusive,
+    guid,
+    invocationTarget,
+    invocationType,
+    jobName,
+    payload,
+    ruleArn,
+    ruleName,
+    schedule,
+    serviceName,
+    ttlSeconds,
   });
-}
+};

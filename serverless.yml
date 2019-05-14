@@ -14,6 +14,7 @@ provider:
     AWS_PROFILE: ${self:provider.profile}
     SERVICE_NAME: ${self:service.name}-${self:provider.stage}
     STATE_MACHINE_ARN_EXECUTE_JOB: ${self:resources.Outputs.ExecuteJobExecutionStateMachineARN.Value}
+    STATE_MACHINE_ARN_UPDATE_JOB: ${self:resources.Outputs.UpdateJobStateMachineARN.Value}
     STATE_MACHINE_ARN_QUEUE_JOB_EXECUTION: ${self:resources.Outputs.QueueJobExecutionStateMachineARN.Value}
     CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
     DYNAMODB_TABLE_NAME_JOBS: ${self:custom.dynamodb_table_name_jobs}
@@ -30,9 +31,15 @@ provider:
       Resource:
         - Ref: ExecuteJobExecution
         - Ref: ExecutionCallback
+        - Ref: UpdateJob
     - Effect: Allow
       Action:
-        - states:sendTask*
+        - states:DescribeExecution
+      Resource:
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:updateJob:*
+    - Effect: Allow
+      Action:
+        - states:SendTask*
       Resource:
         - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
     - Effect: Allow
@@ -175,22 +182,34 @@ functions:
     handler: handlers/update-job-with-execution-results.handler
   updateJobExecutionWithResults:
     handler: handlers/update-job-execution-with-execution-results.handler
-
-  # DynamoDB Stream handlers
-  updateJobSchedule:
-    handler: handlers/update-job-schedule.handler
-    description: Lambda that receives the DynamoDb event when a job is updated, updates event rule
+  updateJobPutRule:
+    handler: handlers/update-job-put-rule.handler
+  updateJobPutTargets:
+    handler: handlers/update-job-put-targets.handler
     environment:
       IAM_ROLE_ARN_CLOUDWATCH_EVENTS:
         Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
-      SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS:
-        Fn::GetAtt: [ JobExecutionEventsFifoSqsQueue, Arn ]
-    events:
-      - stream:
-          type: dynamodb
-          arn:
-            Fn::GetAtt: [ JobsDynamoDbTable, StreamArn ]
-          batchSize: 1
+  updateJobInsertJob:
+    handler: handlers/update-job-insert-job.handler
+  # awaitExecution:
+  #   handler: handlers/await-execution.handler
+  #   timeout: 30
+
+  # DynamoDB Stream handlers
+  # updateJobSchedule:
+  #   handler: handlers/update-job-schedule.handler
+  #   description: Lambda that receives the DynamoDb event when a job is updated, updates event rule
+  #   environment:
+  #     IAM_ROLE_ARN_CLOUDWATCH_EVENTS:
+  #       Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
+  #     SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS:
+  #       Fn::GetAtt: [ JobExecutionEventsFifoSqsQueue, Arn ]
+  #   events:
+  #     - stream:
+  #         type: dynamodb
+  #         arn:
+  #           Fn::GetAtt: [ JobsDynamoDbTable, StreamArn ]
+  #         batchSize: 1
 
   # API handlers
   searchJobs:
@@ -243,9 +262,21 @@ functions:
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: post
+
+
+  # putJob:
+  #   handler: handlers/api/put-job.handler
+  #   description: Idempotent job create/update
+  #   events:
+  #     - http:
+  #         path: services/{serviceName}/jobs/{jobName}
+  #         method: put
   putJob:
-    handler: handlers/api/put-job.handler
+    handler: handlers/await-state-machine-execution.handler
     description: Idempotent job create/update
+    timeout: 30
+    environment:
+      STATE_MACHINE_ARN: ${self:resources.Outputs.UpdateJobStateMachineARN.Value}
     events:
       - http:
           path: services/{serviceName}/jobs/{jobName}
@@ -278,8 +309,46 @@ functions:
 
 stepFunctions:
   stateMachines:
-    # putJobApiHandlerStepFunction:
-    #   name: putJobApiHandler
+    updateJobStepFunction:
+      name: updateJob
+      definition:
+        StartAt: ValidateAndPutRule
+        States:
+          ValidateAndPutRule:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobPutRule
+            Catch:
+            - ErrorEquals: ["States.ALL"]
+              ResultPath: $
+              Next: UpdateJobFailed
+            Next: PutTargets
+          PutTargets:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobPutTargets
+            Catch:
+            - ErrorEquals: ["States.ALL"]
+              ResultPath: $
+              Next: UpdateJobFailed
+            Next: InsertJob
+          InsertJob:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobInsertJob
+            Catch:
+            - ErrorEquals: ["States.ALL"]
+              ResultPath: $
+              Next: UpdateJobFailed
+            End: true
+          UpdateJobFailed:
+            Type: Pass
+            End: true
+
+      # events:
+      #   - http:
+      #       path: test
+      #       method: PUT
+      #       request:
+      #         template: lambda_proxy
+    #   name: updateJob
     #   events:
     #     - http:
     #         path: services/{service_name}/jobs/{job_name}
@@ -474,6 +543,10 @@ resources:
       Description: The ARN of the ExecuteJobExecution state machine
       Value:
         Ref: ExecuteJobExecution
+    UpdateJobStateMachineARN:
+      Description: The ARN of the UpdateJob state machine
+      Value:
+        Ref: UpdateJob
     QueueJobExecutionStateMachineARN:
       Description: The ARN of the QueueJobExecution state machine
       Value:
@@ -501,8 +574,8 @@ resources:
       Properties:
         TableName: ${self:custom.dynamodb_table_name_jobs}
         BillingMode: PAY_PER_REQUEST
-        StreamSpecification:
-          StreamViewType: NEW_AND_OLD_IMAGES
+        # StreamSpecification:
+        #   StreamViewType: NEW_AND_OLD_IMAGES
         AttributeDefinitions:
           - AttributeName: serviceName
             AttributeType: S

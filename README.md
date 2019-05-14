@@ -8,7 +8,8 @@ Note: AWS places a limit of 100 CloudWatch Event Rules per account per region. Y
 
 * Per-function IAM roles
   - seems to conflict with step functions plugin
-* updateJobSchedule as a step function!
+* stage-specific statemachine names
+* ~updateJobSchedule as a step function!~
 * Workarounds for CloudWatch Event Rule limit (100)
   - Never duplicate a schedule expression (so the limit is instead 100 _unique_ schedule expressions)
     - Would require a layer of abstraction between event rules and their jobs
@@ -29,3 +30,4 @@ Note: AWS places a limit of 100 CloudWatch Event Rules per account per region. Y
   - extend the execution's timeout by a duration less than or equal to the job's configured ttl_seconds
   - wait step on the execution needs to retry if the value has been extended
 * Internal job to stop pending state machine executions if ttl expired (cleanup job)
+* Abstract into discrete AWS Event Fork Pipelines components
