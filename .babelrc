@@ -5,14 +5,17 @@
       "env",
       {
         "targets": {
-          "node": "8.10"
+          "node": 10
         }
       }
     ]
   ],
   "env": {
     "development": {
-      "plugins": ["source-map-support", "transform-object-rest-spread"]
+      "plugins": [
+        "source-map-support",
+        "transform-object-rest-spread"
+      ]
     }
   }
 }
