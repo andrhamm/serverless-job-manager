@@ -195,22 +195,6 @@ functions:
   #   handler: handlers/await-execution.handler
   #   timeout: 30
 
-  # DynamoDB Stream handlers
-  # updateJobSchedule:
-  #   handler: handlers/update-job-schedule.handler
-  #   description: Lambda that receives the DynamoDb event when a job is updated, updates event rule
-  #   environment:
-  #     IAM_ROLE_ARN_CLOUDWATCH_EVENTS:
-  #       Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
-  #     SQS_QUEUE_ARN_JOB_EXECUTION_EVENTS:
-  #       Fn::GetAtt: [ JobExecutionEventsFifoSqsQueue, Arn ]
-  #   events:
-  #     - stream:
-  #         type: dynamodb
-  #         arn:
-  #           Fn::GetAtt: [ JobsDynamoDbTable, StreamArn ]
-  #         batchSize: 1
-
   # API handlers
   searchJobs:
     handler: handlers/api/search-jobs.handler
@@ -263,14 +247,6 @@ functions:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: post
 
-
-  # putJob:
-  #   handler: handlers/api/put-job.handler
-  #   description: Idempotent job create/update
-  #   events:
-  #     - http:
-  #         path: services/{serviceName}/jobs/{jobName}
-  #         method: put
   putJob:
     handler: handlers/await-state-machine-execution.handler
     description: Idempotent job create/update
@@ -342,25 +318,6 @@ stepFunctions:
             Type: Pass
             End: true
 
-      # events:
-      #   - http:
-      #       path: test
-      #       method: PUT
-      #       request:
-      #         template: lambda_proxy
-    #   name: updateJob
-    #   events:
-    #     - http:
-    #         path: services/{service_name}/jobs/{job_name}
-    #         method: put
-    #   definition:
-    #     Comment:  Idempotent job create/update
-    #     StartAt:
-    #     PutJob:
-    #       Type: Task
-    #       Resource: ${self:custom.arn_prefix_lambda_function}-putJob
-    #       End: true
-
     queueJobExecutionStepFunction:
       name: queueJobExecution
       definition:
@@ -381,23 +338,6 @@ stepFunctions:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-workExecutionQueue
             End: true
-            # lambda that pulls the next job off the queue and inserts it into dynamodb
-          #   Type: Choice
-          #   Choices:
-          #     - Variable: "$.exclusive"
-          #       BooleanEquals: true
-          #       Next: WorkExecutionQueue
-          #     - Variable: "$.exclusive"
-          #       BooleanEquals: false
-          #       Next: WorkParallelExecutionQueue
-          # WorkExclusiveExecutionQueue:
-          #   Type: Task
-          #   Resource: ${self:custom.arn_prefix_lambda_function}-workExclusiveExecutionQueue
-          #   End: true
-          # WorkParallelExecutionQueue:
-          #   Type: Task
-          #   Resource: ${self:custom.arn_prefix_lambda_function}-workParallelExecutionQueue
-          #   End: true
 
     executeJobExecutionStepFunction:
       name: executeJobExecution
