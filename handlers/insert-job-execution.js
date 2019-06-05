@@ -6,16 +6,22 @@ const {
   DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS,
 } = process.env;
 
-export const handler = async (input, context, callback) => {
-  console.log('event: ' + JSON.stringify(input, null, 2));
+export const handler = async (executionInput, context, callback) => {
+  console.log('event: ' + JSON.stringify(executionInput, null, 2));
+
+  const {
+    input,
+    executionName,
+  } = executionInput;
 
   const {
     jobStatic: {
-      serviceName,
-      jobName,
+      key: {
+        serviceName,
+        jobName,
+      },
     },
     jobExecution: {
-      name: jobExecutionName,
       event,
     },
   } = input;
@@ -48,7 +54,7 @@ export const handler = async (input, context, callback) => {
           timeMs,
         },
         ...executionKey,
-        name: jobExecutionName,
+        name: executionName,
         insertedAt: now,
         updatedAt: now,
       }),
@@ -71,9 +77,9 @@ export const handler = async (input, context, callback) => {
 
   output.jobExecution.key = executionKey;
   output.jobExecution.event.timeMs = timeMs;
-  
+
   delete output.jobExecution.partitionKey;
   delete output.jobExecution.sortKey;
 
-  callback(null, output);
+  return output;
 }

@@ -13,9 +13,6 @@ export const handler = async (input, context, callback) => {
     jobStatic: {
       key: jobKey,
     },
-    jobExecution: {
-      name: jobExecutionName
-    },
   } = input;
 
   const params = {

@@ -20,8 +20,8 @@ Note: AWS places a limit of 100 CloudWatch Event Rules per account per region. Y
       - Ideally start executions in parallel
 * Callback test event
   - when a service configures a job with an HTTP invocation target, make a test request to validate it can be accessed.
-* Add support for overlapping jobs
-  - don't lock on the job
+* ~Add support for overlapping jobs~
+  - ~don't lock on the job~
 * Log job execution metrics as CloudWatch metrics
   - execution latency (time elapsed from scheduled event time to service invocation)
   - enable/implement tracing for all function states, help inform future optimizations

@@ -10,7 +10,6 @@ const {
 } = process.env;
 
 export const handler = async (input, context, callback) => {
-  console.log("test a change");
   console.log('event: ' + JSON.stringify(input, null, 2));
   const {
     jobStatic: {
@@ -28,10 +27,10 @@ export const handler = async (input, context, callback) => {
         time: eventTime,
       },
     },
-    job: {
-      lastSuccessfulExecution,
-    },
+    job,
   } = input;
+
+  const { lastSuccessfulExecution } = job || {};
 
   if (invocationType !== 'http') {
     throw new Error('Unsupported invocation type');
@@ -65,7 +64,6 @@ export const handler = async (input, context, callback) => {
 
   const output = { ...input };
   output.jobExecution.serviceInvokedAt = parseInt(serviceInvokedAtMs / 1000);
-  delete output.awaitCallbackActivity;
 
   callback(null, output);
 }

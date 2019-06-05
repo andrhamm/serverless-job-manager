@@ -22,7 +22,7 @@ export const handler = async (inputs, context, callback) => {
     TableName: DYNAMODB_TABLE_NAME_JOB_EXECUTIONS,
     Key: dynamodbMarshall(jobExecutionKey),
     ExpressionAttributeNames: {
-      '#awaitCallbackTaskToken': 'awaitCallbackTaskToken',
+      '#callbackTaskToken': 'callbackTaskToken',
       '#result': 'result',
       '#updatedAt': 'updatedAt',
       '#jobStatic': 'jobStatic',
@@ -36,7 +36,7 @@ export const handler = async (inputs, context, callback) => {
       },
       ':jobStatic': filterJobStaticExecutionRelevantProps(jobStatic),
     }),
-    UpdateExpression: 'SET #updatedAt = :now, #awaitCallbackTaskToken = :null, #result = :res, #jobStatic = :jobStatic',
+    UpdateExpression: 'SET #updatedAt = :now, #callbackTaskToken = :null, #result = :res, #jobStatic = :jobStatic',
     ReturnValues: 'UPDATED_NEW',
   }).promise();
 

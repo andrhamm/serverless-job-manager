@@ -7,7 +7,7 @@ export const handler = async (inputs, context, callback) => {
   const {
     job,
     jobExecution: {
-      awaitCallbackTaskToken: taskToken
+      callbackTaskToken: taskToken
     },
     jobExecutionResult,
   } = input;
