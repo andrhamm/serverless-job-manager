@@ -15,7 +15,6 @@ provider:
     SERVICE_NAME: ${self:service.name}-${self:provider.stage}
     STATE_MACHINE_ARN_EXECUTE_JOB: ${self:resources.Outputs.ExecuteJobExecutionStateMachineARN.Value}
     STATE_MACHINE_ARN_UPDATE_JOB: ${self:resources.Outputs.UpdateJobStateMachineARN.Value}
-    # STATE_MACHINE_ARN_QUEUE_JOB_EXECUTION: ${self:resources.Outputs.QueueJobExecutionStateMachineARN.Value}
     CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
     DYNAMODB_TABLE_NAME_JOBS: ${self:custom.dynamodb_table_name_jobs}
     DYNAMODB_INDEX_NAME_JOBS_GUID: ${self:custom.dynamodb_index_name_jobs_guid}
@@ -41,13 +40,7 @@ provider:
       Action:
         - states:SendTask*
       Resource:
-        # - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
         - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:stateMachine:executeJobExecution
-    - Effect: Allow
-      Action:
-        - states:GetActivityTask
-      Resource:
-        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:activity:${self:custom.step_function_activity_name_await_callback}
     - Effect: Allow
       Action: iam:PassRole
       Resource:
@@ -91,7 +84,6 @@ provider:
       Action:
         - lambda:InvokeFunction
       Resource:
-        - ${self:custom.arn_prefix_lambda_function}-startExecutionWithEvent
         - ${self:custom.arn_prefix_lambda_function}-mockDelayedServiceExecutionCallback
 
 plugins:
@@ -118,7 +110,6 @@ custom:
   dynamodb_index_name_jobs_guid: ${self:service.name}-${self:provider.stage}-jobs-guid
   # dynamodb_index_name_jobs_schedule: ${self:service.name}-${self:provider.stage}-jobs-schedule
   iam_role_name_cloudwatch_events: ${self:service.name}-${self:provider.stage}-cloudwatchevents
-  step_function_activity_name_await_callback: ${self:service.name}-${self:provider.stage}-awaitCallback
 
 functions:
   # Step function task handlers
