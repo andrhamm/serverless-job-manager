@@ -12,7 +12,7 @@ provider:
   environment:
     # NOTE: this is useful for local invocations and has no affect in deployed environments
     AWS_PROFILE: ${self:provider.profile}
-    SERVICE_NAME: ${self:service.name}-${self:provider.stage}
+    STACK_NAME: ${self:service.name}-${self:provider.stage}
     STATE_MACHINE_ARN_EXECUTE_JOB: ${self:resources.Outputs.ExecuteJobExecutionStateMachineARN.Value}
     STATE_MACHINE_ARN_UPDATE_JOB: ${self:resources.Outputs.UpdateJobStateMachineARN.Value}
     CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
@@ -114,27 +114,27 @@ custom:
 functions:
   # Step function task handlers
   mockDelayedServiceExecutionCallback:
-    handler: handlers/mock-delayed-service-execution-callback.handler
+    handler: src/deliveries/lambda/mock-delayed-service-execution-callback.delivery
     description: Posts to the callback endpoint after a random delay
     timeout: 10
   getJobKeyByGuid:
-    handler: handlers/get-job-key-by-guid.handler
+    handler: src/deliveries/lambda/get-job-key-by-guid.delivery
   getJobLock:
     description: For exclusive jobs, locks the job record and passes job attributes to next task
-    handler: handlers/get-job-lock.handler
+    handler: src/deliveries/lambda/get-job-lock.delivery
   getJob:
     description: For non-exclusive jobs, passes job attributes to next task
-    handler: handlers/get-job.handler
+    handler: src/deliveries/lambda/get-job.delivery
   getJobExecutionByExecutionKey:
-    handler: handlers/get-job-execution-by-execution-key.handler
+    handler: src/deliveries/lambda/get-job-execution-by-execution-key.delivery
   insertJobExecution:
-    handler: handlers/insert-job-execution.handler
+    handler: src/deliveries/lambda/insert-job-execution.delivery
     description: Lambda that inserts the pending job execution into DynamoDB
   saveCallbackTaskToken:
-    handler: handlers/save-callback-task-token.handler
+    handler: src/deliveries/lambda/save-callback-task-token.delivery
     description: Updates the job execution record in DynamoDB with the callbackTaskToken
   invokeServiceExecution:
-    handler: handlers/invoke-service-execution.handler
+    handler: src/deliveries/lambda/invoke-service-execution.delivery
     description: Lambda that calls the invocation_target with the event details
     environment:
       API_BASE:
@@ -143,25 +143,41 @@ functions:
           - - Ref: ApiGatewayRestApi
             - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
   updateAwaitCallbackActivityStatus:
-    handler: handlers/update-await-callback-activity-status.handler
+    handler: src/deliveries/lambda/update-await-callback-activity-status.delivery
     description: Lambda that calls updates the task status for the AwaitCallback activity
   updateJobWithExecutionResults:
-    handler: handlers/update-job-with-execution-results.handler
+    handler: src/deliveries/lambda/update-job-with-execution-results.delivery
   updateJobExecutionWithResults:
-    handler: handlers/update-job-execution-with-execution-results.handler
-  updateJobPutRule:
-    handler: handlers/update-job-put-rule.handler
-  updateJobPutTargets:
-    handler: handlers/update-job-put-targets.handler
+    handler: src/deliveries/lambda/update-job-execution-with-execution-results.delivery
+  updateJobSchedule:
+    handler: src/deliveries/lambda/update-job-schedule.delivery
+  updateJobScheduleTargets:
+    handler: src/deliveries/lambda/update-job-schedule-targets.delivery
     environment:
       IAM_ROLE_ARN_CLOUDWATCH_EVENTS:
         Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
   updateJobInsertJob:
-    handler: handlers/update-job-insert-job.handler
+    handler: src/deliveries/lambda/update-job-insert-job.delivery
 
   # API handlers
+  searchJobsByService:
+    handler: src/deliveries/lambda/search-jobs-by-service.delivery
+    description: Read endpoint for jobs
+    environment:
+      API_BASE:
+        Fn::Join:
+          - ""
+          - - Ref: ApiGatewayRestApi
+            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+    events:
+      - http:
+          path: services/{serviceName}/jobs
+          method: get
+      - http:
+          path: services/{serviceName}/jobs
+          method: post
   searchJobs:
-    handler: handlers/api/search-jobs.handler
+    handler: src/deliveries/lambda/search-jobs.delivery
     description: Read endpoint for jobs
     environment:
       API_BASE:
@@ -174,16 +190,11 @@ functions:
           path: jobs
           method: get
       - http:
-          path: services/{serviceName}/jobs
-          method: get
-      - http:
           path: jobs
           method: post
-      - http:
-          path: services/{serviceName}/jobs
-          method: post
+
   searchJobExecutions:
-    handler: handlers/api/search-job-executions.handler
+    handler: src/deliveries/lambda/search-job-executions.delivery
     description: Read endpoint for job executions
     environment:
       API_BASE:
@@ -211,7 +222,7 @@ functions:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: post
   putJob:
-    handler: handlers/await-state-machine-execution.handler
+    handler: src/deliveries/lambda/await-state-machine-execution.delivery
     description: Idempotent job create/update
     timeout: 30
     environment:
@@ -221,14 +232,14 @@ functions:
           path: services/{serviceName}/jobs/{jobName}
           method: put
   deleteJob:
-    handler: handlers/api/delete-job.handler
+    handler: src/deliveries/lambda/delete-job.delivery
     description: Idempotent job delete
     events:
       - http:
           path: services/{serviceName}/jobs/{jobName}
           method: delete
   serviceExecutionCallback:
-    handler: handlers/api/service-execution-callback.handler
+    handler: src/deliveries/lambda/service-execution-callback.delivery
     description: Endpoint for services to call with job results, starts and execution of the ExecutionCallback state machine
     environment:
       STATE_MACHINE_ARN_EXECUTION_CALLBACK: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
@@ -237,7 +248,7 @@ functions:
           path: callback/{jobGuid}/{encodedJobExecutionKey}
           method: post
   mockHttpInvokeTarget:
-    handler: handlers/api/mock-http-invoke-target.handler
+    handler: src/deliveries/lambda/mock-http-invoke-target.delivery
     description: Endpoint for testing HTTP invoke target
     environment:
       LAMBDA_ARN_MOCK_DELAYED_CALLBACK: ${self:resources.Outputs.MockDelayedServiceExecutionCallbackLambdaFunctionARN.Value}
@@ -251,11 +262,12 @@ stepFunctions:
     updateJobStepFunction:
       name: updateJob
       definition:
-        StartAt: ValidateAndPutRule
+        StartAt: ValidateAndUpdateSchedule
         States:
-          ValidateAndPutRule:
+          # TODO: separate validation from actions, use swagger
+          ValidateAndUpdateSchedule:
             Type: Task
-            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobPutRule
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobSchedule
             Catch:
             - ErrorEquals: ["States.ALL"]
               ResultPath: $
@@ -263,7 +275,7 @@ stepFunctions:
             Next: PutTargets
           PutTargets:
             Type: Task
-            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobPutTargets
+            Resource: ${self:custom.arn_prefix_lambda_function}-updateJobScheduleTargets
             Catch:
             - ErrorEquals: ["States.ALL"]
               ResultPath: $
@@ -299,6 +311,9 @@ stepFunctions:
           GetJobLock:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-getJobLock
+            Parameters:
+              input.$: $$.Execution.Input
+              executionName.$: $$.Execution.Name
             Retry:
             - ErrorEquals:
               - ConditionalCheckFailedException
