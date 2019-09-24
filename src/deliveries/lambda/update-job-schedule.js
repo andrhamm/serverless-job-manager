@@ -64,7 +64,12 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
     async = !!async;
     exclusive = !!exclusive;
 
-    const { ruleArn, ruleName } = await updateJobSchedule({
+    const {
+      guid,
+      ruleArn,
+      ruleName,
+    } = await updateJobSchedule({
+      enabled,
       jobName,
       schedule,
       serviceName,
@@ -74,7 +79,7 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
       async,
       enabled,
       exclusive,
-      // guid,
+      guid,
       invocationTarget,
       invocationType,
       jobName,

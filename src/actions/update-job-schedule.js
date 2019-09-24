@@ -11,13 +11,13 @@ import CustomError from '../lib/errors';
 
 export const makeUpdateJobSchedule = ({
   cloudwatchEventsRulePrefix,
-  stackName,
   getLogger,
+  stackName,
 }) => async function updateJobSchedule({
+  enabled,
   jobName,
   schedule,
   serviceName,
-  enabled,
 }) {
   // deterministic uuid
   const guid = uuidv5([serviceName, jobName].join('--'), uuidv5.URL);
@@ -49,6 +49,7 @@ export const makeUpdateJobSchedule = ({
   }
 
   return {
+    guid,
     ruleArn,
     ruleName,
   };
