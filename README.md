@@ -31,13 +31,13 @@ Note: AWS places a limit of 100 CloudWatch Event Rules per account per region. Y
   - wait step on the execution needs to retry if the value has been extended
 * Internal job to stop pending state machine executions if ttl expired (cleanup job)
 * Abstract into discrete AWS Event Fork Pipelines components
-* Update to node10
+* ~Update to node10~
   * ```
     const { logger, appenders, layouts } = require('lambda-logging')
     logger().appender = new appenders.ConsoleAppender(
      new layouts.Node4LegacyLayout()
     )
     ```
-* Structured logging with log4js
-* Use Awilix for IoC/Dependency Injection
+* (better) Structured logging with log4js
+* ~Use Awilix for IoC/Dependency Injection~
 * Use TypeScript... maybe

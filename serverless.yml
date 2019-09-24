@@ -5,7 +5,7 @@ frameworkVersion: '>=1.44.1 <2.0.0'
 
 provider:
   name: aws
-  runtime: nodejs8.10
+  runtime: nodejs10.x
   stage: ${opt:stage, 'stage'}
   profile: ${opt:profile, 'gasbuddy-staging'}
   region: us-east-1
