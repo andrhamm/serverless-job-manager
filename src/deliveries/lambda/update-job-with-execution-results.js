@@ -1,6 +1,9 @@
 import configureContainer from '../../container';
 
-function makeDeliveryLambdaUpdateJobWithExecutionResults({ updateJobExecutionResults, getLogger }) {
+function makeDeliveryLambdaUpdateJobWithExecutionResults({
+  getLogger,
+  updateJobWithExecutionResults,
+}) {
   return async function delivery(inputs, context, callback) {
     const input = Object.assign({}, ...inputs);
 
@@ -22,12 +25,13 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({ updateJobExecutionRes
 
     const logger = getLogger();
     logger.addContext('guid', guid);
+    logger.addContext('jobExecutionName', jobExecutionName);
     logger.debug(`event: ${JSON.stringify(inputs)}`);
 
     let updatedJob = {};
 
     if (exclusive) {
-      updatedJob = await updateJobExecutionResults(
+      updatedJob = await updateJobWithExecutionResults(
         jobKey,
         jobExecutionName,
         eventTime,

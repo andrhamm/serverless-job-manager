@@ -4,7 +4,7 @@ function makeDeliveryLambdaSaveCallbackTaskToken({
   updateJobExecutionCallbackTaskToken,
   getLogger,
 }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       jobExecutionKey,
       callbackTaskToken,
@@ -14,9 +14,13 @@ function makeDeliveryLambdaSaveCallbackTaskToken({
     // logger.addContext('guid', guid);
     logger.debug(`event: ${JSON.stringify(input)}`);
 
-    await updateJobExecutionCallbackTaskToken(jobExecutionKey, callbackTaskToken);
+    const res = await updateJobExecutionCallbackTaskToken(jobExecutionKey, callbackTaskToken);
 
-    callback(null, { callbackTaskToken });
+    logger.debug(`updated ${res}`);
+
+    return {
+      callbackTaskToken,
+    };
   };
 }
 

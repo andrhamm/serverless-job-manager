@@ -1,14 +1,14 @@
 import { filterJobStaticExecutionRelevantProps } from '../lib/job_executions_utils';
 
-export const makeUpdateJobExecutionWithResults = ({
+export const makeUpdateJobExecutionWithExecutionResults = ({
   jobsRepository,
-}) => function updateJobExecutionWithResults(
+}) => function updateJobExecutionWithExecutionResults(
   jobExecutionKey,
   serviceInvokedAt,
   jobStatic,
   jobExecutionResult,
 ) {
-  return jobsRepository.updateJobExecutionWithResults(
+  return jobsRepository.updateJobExecutionWithExecutionResults(
     jobExecutionKey,
     serviceInvokedAt,
     filterJobStaticExecutionRelevantProps(jobStatic),

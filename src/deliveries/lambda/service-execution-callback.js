@@ -2,7 +2,6 @@ import configureContainer from '../../container';
 
 import { decodeEncodedJobExecutionKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
 
-
 function makeDeliveryLambdaServiceExecutionCallback({ serviceExecutionCallback, getLogger }) {
   return async function delivery(input, context, callback) {
     const logger = getLogger();

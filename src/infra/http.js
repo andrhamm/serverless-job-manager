@@ -1,11 +1,9 @@
 import axios from 'axios';
 
-export const makeGetHttpClient = ({apiBaseUrl}) => {
-  return function getHttpClient() {
-    const instance = axios.create({
-      baseURL: `https://${apiBaseUrl}/`,
-    });
+export const makeGetHttpClient = ({ apiBaseUrl }) => function getHttpClient() {
+  const instance = axios.create({
+    baseURL: apiBaseUrl,
+  });
 
-    return instance;
-  }
+  return instance;
 };

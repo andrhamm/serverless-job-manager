@@ -353,7 +353,7 @@ class JobsRepository {
     return params;
   }
 
-  async updateJobExecutionResults(
+  async updateJobWithExecutionResults(
     jobKey,
     jobExecutionName,
     scheduledTime,
@@ -393,7 +393,7 @@ class JobsRepository {
     return dynamodbUnmarshall(updatedJob);
   }
 
-  async updateJobExecutionWithResults(
+  async updateJobExecutionWithExecutionResults(
     jobExecutionKey,
     serviceInvokedAt,
     jobStatic,

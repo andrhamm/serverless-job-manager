@@ -18,4 +18,6 @@ export const makeServiceExecutionCallback = ({
     }),
     name: executionName,
   }).promise();
+
+  return true;
 };

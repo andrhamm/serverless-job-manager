@@ -23,6 +23,12 @@ provider:
     DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS: 8
     # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
     #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
+    API_BASE:
+      Fn::Join:
+        - ""
+        - - "https://"
+          - Ref: ApiGatewayRestApi
+          - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -93,6 +99,9 @@ plugins:
   - serverless-webpack
   # - serverless-tag-cloud-watch-logs
 
+package:
+  individually: true
+
 custom:
   webpack:
     webpackConfig: ./webpack.config.js
@@ -115,7 +124,7 @@ functions:
   # Step function task handlers
   mockDelayedServiceExecutionCallback:
     handler: src/deliveries/lambda/mock-delayed-service-execution-callback.delivery
-    description: Posts to the callback endpoint after a random delay
+    description: Posts to the callback endpoint after a random delay up to 3 seconds
     timeout: 10
   getJobKeyByGuid:
     handler: src/deliveries/lambda/get-job-key-by-guid.delivery
@@ -136,12 +145,6 @@ functions:
   invokeServiceExecution:
     handler: src/deliveries/lambda/invoke-service-execution.delivery
     description: Lambda that calls the invocation_target with the event details
-    environment:
-      API_BASE:
-        Fn::Join:
-          - ""
-          - - Ref: ApiGatewayRestApi
-            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
   updateAwaitCallbackActivityStatus:
     handler: src/deliveries/lambda/update-await-callback-activity-status.delivery
     description: Lambda that calls updates the task status for the AwaitCallback activity
@@ -163,12 +166,6 @@ functions:
   searchJobsByService:
     handler: src/deliveries/lambda/search-jobs-by-service.delivery
     description: Read endpoint for jobs
-    environment:
-      API_BASE:
-        Fn::Join:
-          - ""
-          - - Ref: ApiGatewayRestApi
-            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     events:
       - http:
           path: services/{serviceName}/jobs
@@ -179,12 +176,6 @@ functions:
   searchJobs:
     handler: src/deliveries/lambda/search-jobs.delivery
     description: Read endpoint for jobs
-    environment:
-      API_BASE:
-        Fn::Join:
-          - ""
-          - - Ref: ApiGatewayRestApi
-            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     events:
       - http:
           path: jobs
@@ -196,12 +187,6 @@ functions:
   searchJobExecutions:
     handler: src/deliveries/lambda/search-job-executions.delivery
     description: Read endpoint for job executions
-    environment:
-      API_BASE:
-        Fn::Join:
-          - ""
-          - - Ref: ApiGatewayRestApi
-            - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
     events:
       - http:
           path: executions

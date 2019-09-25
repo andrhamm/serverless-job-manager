@@ -45,7 +45,7 @@ export const makeInvokeServiceExecution = ({
   const lagMs = serviceInvokedAtMs - scheduledTimeMs;
   const lagPct = ((lagMs / (ttlSeconds * 1000)) * 100).toFixed(1);
   logger.addContext('callbackUrl', callbackUrl);
-  logger.debug(`Invoking service job execution with ${lagMs}ms latency (${lagPct}% of ${ttlSeconds}s ttl):\nPOST ${invocationTarget}\n${JSON.stringify(serviceEvent, null, 2)}`);
+  logger.debug(`Invoking service job execution with ${lagMs}ms latency (${lagPct}% of ${ttlSeconds}s ttl):\nPOST ${invocationTarget}\n${JSON.stringify(serviceEvent)}`);
 
   // TODO: configure request timeout, etc
   // TODO: validate status

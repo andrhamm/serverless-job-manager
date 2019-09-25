@@ -14,13 +14,14 @@ import { makeInvokeMockDelayedCallback } from './actions/invoke-mock-delayed-cal
 import { makeInvokeServiceExecution } from './actions/invoke-service-execution';
 import { makeLockJobByKey } from './actions/lock-job-by-key';
 import { makeMockDelayedServiceExecutionCallback } from './actions/mock-delayed-service-execution-callback';
-import { makeSearchJobs } from './actions/search-jobs';
 import { makeSearchJobExecutions } from './actions/search-job-executions';
+import { makeSearchJobs } from './actions/search-jobs';
 import { makeSearchJobsByService } from './actions/search-jobs-by-service';
+import { makeServiceExecutionCallback } from './actions/service-execution-callback';
 import { makeSoftDeleteJob } from './actions/soft-delete-job';
 import { makeUpdateAwaitCallbackActivityStatus } from './actions/update-await-callback-activity-status';
 import { makeUpdateJobExecutionCallbackTaskToken } from './actions/update-job-execution-callback-task-token';
-import { makeUpdateJobExecutionWithResults } from './actions/update-job-execution-with-results';
+import { makeUpdateJobExecutionWithExecutionResults } from './actions/update-job-execution-with-execution-results';
 import { makeUpdateJobSchedule } from './actions/update-job-schedule';
 import { makeUpdateJobScheduleTargets } from './actions/update-job-schedule-targets';
 import { makeUpdateJobWithExecutionResults } from './actions/update-job-with-execution-results';
@@ -81,13 +82,14 @@ export default function configureContainer() {
     invokeServiceExecution: asFunction(makeInvokeServiceExecution),
     lockJobByKey: asFunction(makeLockJobByKey),
     mockDelayedServiceExecutionCallback: asFunction(makeMockDelayedServiceExecutionCallback),
-    searchJobs: asFunction(makeSearchJobs),
     searchJobExecutions: asFunction(makeSearchJobExecutions),
+    searchJobs: asFunction(makeSearchJobs),
     searchJobsByService: asFunction(makeSearchJobsByService),
+    serviceExecutionCallback: asFunction(makeServiceExecutionCallback),
     softDeleteJob: asFunction(makeSoftDeleteJob),
     updateAwaitCallbackActivityStatus: asFunction(makeUpdateAwaitCallbackActivityStatus),
     updateJobExecutionCallbackTaskToken: asFunction(makeUpdateJobExecutionCallbackTaskToken),
-    updateJobExecutionWithResults: asFunction(makeUpdateJobExecutionWithResults),
+    updateJobExecutionWithExecutionResults: asFunction(makeUpdateJobExecutionWithExecutionResults),
     updateJobSchedule: asFunction(makeUpdateJobSchedule),
     updateJobScheduleTargets: asFunction(makeUpdateJobScheduleTargets),
     updateJobWithExecutionResults: asFunction(makeUpdateJobWithExecutionResults),

@@ -36,6 +36,7 @@ function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger })
       ...executionInput,
     };
 
+    output.jobExecution.name = executionName;
     output.jobExecution.key = executionKey;
     output.jobExecution.event.timeMs = timeMs;
     delete output.jobExecution.partitionKey;
