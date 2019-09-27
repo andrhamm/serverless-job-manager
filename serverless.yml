@@ -216,6 +216,7 @@ functions:
       - http:
           path: services/{serviceName}/jobs/{jobName}
           method: put
+          authorizer: aws_iam
   deleteJob:
     handler: src/deliveries/lambda/delete-job.delivery
     description: Idempotent job delete
@@ -223,6 +224,7 @@ functions:
       - http:
           path: services/{serviceName}/jobs/{jobName}
           method: delete
+          authorizer: aws_iam
   serviceExecutionCallback:
     handler: src/deliveries/lambda/service-execution-callback.delivery
     description: Endpoint for services to call with job results, starts and execution of the ExecutionCallback state machine
@@ -232,6 +234,7 @@ functions:
       - http:
           path: callback/{jobGuid}/{encodedJobExecutionKey}
           method: post
+          authorizer: aws_iam
   mockHttpInvokeTarget:
     handler: src/deliveries/lambda/mock-http-invoke-target.delivery
     description: Endpoint for testing HTTP invoke target
@@ -241,6 +244,7 @@ functions:
       - http:
           path: http-invoke
           method: post
+          authorizer: aws_iam
 
 stepFunctions:
   stateMachines:
