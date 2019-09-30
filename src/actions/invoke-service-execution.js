@@ -33,8 +33,8 @@ export const makeInvokeServiceExecution = ({
   const serviceEvent = snakeCaseObj({
     callbackUrl,
     jobName,
-    payload,
     lastSuccessfulExecution,
+    payload,
     schedule: ruleSchedule,
     scheduledTime: eventTime,
     scheduledTimeMs,
@@ -49,6 +49,7 @@ export const makeInvokeServiceExecution = ({
 
   // TODO: configure request timeout, etc
   // TODO: validate status
+  // TODO: add support for `sync` jobs (response to this call is the result of the job)
   const { status, statusText, data } = await client.post(invocationTarget, serviceEvent);
 
   logger.debug(`${status} ${statusText} ${data ? JSON.stringify(data) : ''}`);

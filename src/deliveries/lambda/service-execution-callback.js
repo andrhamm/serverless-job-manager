@@ -3,7 +3,7 @@ import configureContainer from '../../container';
 import { decodeEncodedJobExecutionKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
 
 function makeDeliveryLambdaServiceExecutionCallback({ serviceExecutionCallback, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const logger = getLogger();
     // logger.addContext('jobKey', jobKey);
     logger.debug(`event: ${JSON.stringify(input)}`);
@@ -25,12 +25,12 @@ function makeDeliveryLambdaServiceExecutionCallback({ serviceExecutionCallback, 
 
     await serviceExecutionCallback(jobGuid, jobExecutionKey, filteredJobExecutionResult);
 
-    callback(null, {
+    return {
       statusCode: 204,
       headers: {
         'Content-Type': 'application/json',
       },
-    });
+    };
   };
 }
 

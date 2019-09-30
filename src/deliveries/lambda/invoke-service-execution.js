@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       jobStatic: {
         guid: jobGuid,
@@ -47,7 +47,7 @@ function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getL
     output.jobExecution.serviceInvokedAt = parseInt(serviceInvokedAtMs / 1000, 10);
     output.jobExecution.serviceInvocationResponse = serviceInvocationResponse;
 
-    callback(null, output);
+    return output;
   };
 }
 

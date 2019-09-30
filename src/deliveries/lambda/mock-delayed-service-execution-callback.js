@@ -4,20 +4,15 @@ function makeDeliveryLambdaMockDelayedServiceExecutionCallback({
   mockDelayedServiceExecutionCallback,
   getLogger,
 }) {
-  return async function delivery(input, context, callback) {
-    try {
-      const logger = getLogger();
-      logger.debug(`event: ${JSON.stringify(input)}`);
+  return async function delivery(input) {
+    const logger = getLogger();
+    logger.debug(`event: ${JSON.stringify(input)}`);
 
-      const { callbackUrl } = input;
+    const { callbackUrl } = input;
 
-      await mockDelayedServiceExecutionCallback(callbackUrl);
+    await mockDelayedServiceExecutionCallback(callbackUrl);
 
-      callback(null, true);
-    } catch (error) {
-      console.log('ERRORRRRRRR');
-      console.log(error);
-    }
+    return true;
   };
 }
 

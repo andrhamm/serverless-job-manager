@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaUpdateJobInsertJob({ insertJob, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       async,
       enabled,
@@ -36,7 +36,7 @@ function makeDeliveryLambdaUpdateJobInsertJob({ insertJob, getLogger }) {
 
     const insertedJob = await insertJob(job);
 
-    callback(null, insertedJob);
+    return insertedJob;
   };
 }
 

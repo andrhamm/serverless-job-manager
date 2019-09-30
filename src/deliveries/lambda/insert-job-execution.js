@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       input: executionInput,
       executionName,
@@ -42,7 +42,7 @@ function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger })
     delete output.jobExecution.partitionKey;
     delete output.jobExecution.sortKey;
 
-    callback(null, output);
+    return output;
   };
 }
 

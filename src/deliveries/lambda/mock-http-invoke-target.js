@@ -2,7 +2,7 @@ import configureContainer from '../../container';
 import { camelCaseObj } from '../../lib/common';
 
 function makeDeliveryLambdaMockHttpInvokeTarget({ invokeMockDelayedCallback, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const logger = getLogger();
     logger.debug(`event: ${JSON.stringify(input)}`);
 
@@ -16,12 +16,12 @@ function makeDeliveryLambdaMockHttpInvokeTarget({ invokeMockDelayedCallback, get
 
     await invokeMockDelayedCallback(callbackUrl);
 
-    callback(null, {
+    return {
       statusCode: 204,
       headers: {
         'Content-Type': 'application/json',
       },
-    });
+    };
   };
 }
 

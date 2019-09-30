@@ -3,7 +3,7 @@ import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
 function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
   // eslint-disable-next-line consistent-return
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const logger = getLogger();
     // logger.addContext('jobKey', jobKey);
     logger.debug(`event: ${JSON.stringify(input)}`);
@@ -50,10 +50,10 @@ function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
       results: results.map(snakeCaseObj),
     };
 
-    callback(null, {
+    return {
       statusCode: 200,
       body: JSON.stringify(response, null, 2),
-    });
+    };
   };
 }
 

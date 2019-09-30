@@ -4,7 +4,7 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
   getLogger,
   updateJobWithExecutionResults,
 }) {
-  return async function delivery(inputs, context, callback) {
+  return async function delivery(inputs) {
     const input = Object.assign({}, ...inputs);
 
     const {
@@ -40,7 +40,7 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
       );
     }
 
-    callback(null, updatedJob);
+    return updatedJob;
   };
 }
 

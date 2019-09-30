@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaDeleteJob({ softDeleteJob, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       serviceName,
       jobName,
@@ -18,10 +18,10 @@ function makeDeliveryLambdaDeleteJob({ softDeleteJob, getLogger }) {
 
     await softDeleteJob(jobKey);
 
-    callback(null, {
+    return {
       statusCode: 204,
       body: '',
-    });
+    };
   };
 }
 

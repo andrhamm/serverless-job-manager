@@ -4,7 +4,7 @@ function makeDeliveryLambdaGetJobExecutionByExecutionKey({
   getJobExecutionByExecutionKey,
   getLogger,
 }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const { jobExecutionKey } = input;
 
     const logger = getLogger();
@@ -20,7 +20,7 @@ function makeDeliveryLambdaGetJobExecutionByExecutionKey({
     delete output.jobExecutionKey;
     delete output.jobGuid;
 
-    callback(null, output);
+    return output;
   };
 }
 

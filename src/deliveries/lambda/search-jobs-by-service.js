@@ -2,7 +2,7 @@ import configureContainer from '../../container';
 import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
 function makeDeliveryLambdaSearchJobsByService({ searchJobsByService, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const logger = getLogger();
     // logger.addContext('jobKey', jobKey);
     logger.debug(`event: ${JSON.stringify(input)}`);
@@ -15,10 +15,10 @@ function makeDeliveryLambdaSearchJobsByService({ searchJobsByService, getLogger 
 
     const results = await searchJobsByService(pathParams.serviceName);
 
-    callback(null, {
+    return {
       statusCode: 200,
       body: JSON.stringify({ results: results.map(snakeCaseObj) }, null, 2),
-    });
+    };
   };
 }
 

@@ -4,7 +4,7 @@ function makeDeliveryLambdaUpdateAwaitCallbackActivityStatus({
   getLogger,
   updateAwaitCallbackActivityStatus,
 }) {
-  return async function delivery(inputs, context, callback) {
+  return async function delivery(inputs) {
     const logger = getLogger();
     // logger.addContext('guid', guid);
     logger.debug(`event: ${JSON.stringify(inputs)}`);
@@ -19,7 +19,7 @@ function makeDeliveryLambdaUpdateAwaitCallbackActivityStatus({
 
     await updateAwaitCallbackActivityStatus(jobExecutionResult, callbackTaskToken);
 
-    callback(null, {});
+    return {};
   };
 }
 

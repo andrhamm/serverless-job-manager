@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaGetJobKeyByGuid({ getJobKeyByGuid, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const { jobGuid } = input;
 
     const logger = getLogger();
@@ -10,11 +10,11 @@ function makeDeliveryLambdaGetJobKeyByGuid({ getJobKeyByGuid, getLogger }) {
 
     const jobKey = await getJobKeyByGuid(jobGuid);
 
-    callback(null, {
+    return {
       jobStatic: {
         key: jobKey,
       },
-    });
+    };
   };
 }
 

@@ -1,7 +1,7 @@
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaUpdateJobScheduleTargets({ updateJobScheduleTargets, getLogger }) {
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const {
       ruleName,
       ...jobStatic
@@ -13,7 +13,7 @@ function makeDeliveryLambdaUpdateJobScheduleTargets({ updateJobScheduleTargets, 
 
     await updateJobScheduleTargets(ruleName, jobStatic);
 
-    callback(null, input);
+    return input;
   };
 }
 
