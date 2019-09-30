@@ -1,0 +1,49 @@
+{
+  "definitions": {},
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "The Root Schema",
+  "required": [
+    "async",
+    "enabled",
+    "exclusive",
+    "invocation_target",
+    "invocation_type",
+    "schedule",
+    "ttl_seconds"
+  ],
+  "properties": {
+    "async": {
+      "type": "boolean",
+      "enum": [
+        true
+      ]
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "exclusive": {
+      "type": "boolean"
+    },
+    "invocation_target": {
+      "type": "string",
+      "pattern": "^https?:\/\/"
+    },
+    "invocation_type": {
+      "type": "string",
+      "enum": [
+        "http"
+      ]
+    },
+    "payload": {
+      "type": "string"
+    },
+    "schedule": {
+      "type": "string",
+      "pattern": "(rate|cron)\\(.*\\)"
+    },
+    "ttl_seconds": {
+      "type": "integer"
+    }
+  }
+}
