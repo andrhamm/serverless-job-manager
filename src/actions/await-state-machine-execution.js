@@ -11,6 +11,7 @@ export const makeAwaitStateMachineExecution = ({
   const logger = getLogger();
   // logger.addContext('guid', guid);
 
+  // TODO: move to an ExecutionsRepository
   const { executionArn } = await stepfunctions.startExecution({
     stateMachineArn,
     input: JSON.stringify(executionInput),

@@ -183,13 +183,19 @@ class JobsRepository {
 
     // does a consistent write to get a lock on the job
     const {
-      Attributes: jobUpdated,
+      Attributes: updated,
     } = await this.dynamodb.updateItem(params).promise();
+
+    const updatedJob = dynamodbUnmarshall(updated);
+
+    this.logger.addContext('updateItemParams', params);
+    this.logger.addContext('updatedJob', updatedJob);
+    this.logger.debug('lockJobByKey complete');
 
     // the input already has many of the job properties specific to the execution event,
     // but later we will need other properties from the job so add those (previous state,
     // ttl_seconds, etc)
-    return dynamodbUnmarshall(jobUpdated);
+    return updatedJob;
   }
 
   async insertJobExecution(executionName, serviceName, jobName, triggerEvent) {

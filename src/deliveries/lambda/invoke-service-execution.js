@@ -1,3 +1,4 @@
+import { inspect } from 'util';
 import configureContainer from '../../container';
 
 function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getLogger }) {
@@ -25,7 +26,7 @@ function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getL
 
     const logger = getLogger();
     logger.addContext('guid', jobGuid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.debug(`event: ${inspect(input)}`);
 
     const {
       serviceInvokedAtMs,

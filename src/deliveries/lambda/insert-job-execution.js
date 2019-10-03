@@ -2,8 +2,10 @@ import configureContainer from '../../container';
 
 function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger }) {
   return async function delivery(input) {
+    const logger = getLogger();
+
     const {
-      input: executionInput,
+      executionInput,
       executionName,
     } = input;
 
@@ -20,10 +22,10 @@ function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger })
       },
     } = executionInput;
 
-    const logger = getLogger();
     logger.addContext('guid', guid);
     logger.addContext('executionName', executionName);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const {
       key: executionKey,
@@ -41,6 +43,9 @@ function makeDeliveryLambdaInsertJobExecution({ insertJobExecution, getLogger })
     output.jobExecution.event.timeMs = timeMs;
     delete output.jobExecution.partitionKey;
     delete output.jobExecution.sortKey;
+
+    logger.addContext('output', output);
+    logger.debug('end');
 
     return output;
   };

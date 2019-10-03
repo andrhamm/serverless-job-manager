@@ -8,8 +8,8 @@ export const makeServiceExecutionCallback = ({
   const { eventId } = parseSortKey(sortKey);
   const executionName = `${jobGuid}--${eventId}`;
 
-  // const { executionArn } =
-  await stepfunctions.startExecution({
+  // TODO: move to an ExecutionsRepository
+  const { serviceCallbackExecutionArn } = await stepfunctions.startExecution({
     stateMachineArn: stateMachineArnExecutionCallback,
     input: JSON.stringify({
       jobGuid,
@@ -19,5 +19,7 @@ export const makeServiceExecutionCallback = ({
     name: executionName,
   }).promise();
 
-  return true;
+  return {
+    serviceCallbackExecutionArn,
+  };
 };

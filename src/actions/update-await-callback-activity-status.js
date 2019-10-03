@@ -5,7 +5,7 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
     jobExecutionResult,
     callbackTaskToken,
   ) {
-    const { status, ...output } = jobExecutionResult;
+    const { status } = jobExecutionResult;
     let method;
     const params = { taskToken: callbackTaskToken };
 
@@ -22,7 +22,7 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
       case 'success':
       default:
         method = 'sendTaskSuccess';
-        params.output = JSON.stringify({ output });
+        params.output = JSON.stringify(jobExecutionResult);
     }
 
     await stepfunctions[method](params).promise();

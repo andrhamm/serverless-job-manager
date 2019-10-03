@@ -6,7 +6,7 @@ function makeDeliveryLambdaGetJobLock({
 }) {
   return async function delivery(input) {
     const {
-      input: executionInput,
+      executionInput,
       executionName,
     } = input;
 
@@ -20,14 +20,20 @@ function makeDeliveryLambdaGetJobLock({
     const logger = getLogger();
     logger.addContext('guid', guid);
     logger.addContext('executionName', executionName);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const job = await lockJobByKey(jobKey, executionName);
 
-    return {
-      ...input,
+    const output = {
+      ...executionInput,
       ...job,
     };
+
+    logger.addContext('output', output);
+    logger.debug('end');
+
+    return JSON.parse(JSON.stringify(output));
   };
 }
 

@@ -1,4 +1,7 @@
+// import { asValue } from 'awilix';
 import configureContainer from '../../container';
+
+const container = configureContainer();
 
 function makeDeliveryLambdaMockDelayedServiceExecutionCallback({
   mockDelayedServiceExecutionCallback,
@@ -6,7 +9,9 @@ function makeDeliveryLambdaMockDelayedServiceExecutionCallback({
 }) {
   return async function delivery(input) {
     const logger = getLogger();
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    // container.register('logger', asValue(logger));
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const { callbackUrl } = input;
 
@@ -16,6 +21,6 @@ function makeDeliveryLambdaMockDelayedServiceExecutionCallback({
   };
 }
 
-export const delivery = configureContainer().build(
+export const delivery = container.build(
   makeDeliveryLambdaMockDelayedServiceExecutionCallback,
 );

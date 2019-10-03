@@ -1,10 +1,18 @@
+// import { asValue } from 'awilix';
 import configureContainer from '../../container';
 import { camelCaseObj } from '../../lib/common';
 
-function makeDeliveryLambdaMockHttpInvokeTarget({ invokeMockDelayedCallback, getLogger }) {
+const container = configureContainer();
+
+function makeDeliveryLambdaMockHttpInvokeTarget({
+  invokeMockDelayedCallback,
+  getLogger,
+}) {
   return async function delivery(input) {
     const logger = getLogger();
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    // container.register('logger', asValue(logger));
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const {
       body: bodyJson,
@@ -18,11 +26,9 @@ function makeDeliveryLambdaMockHttpInvokeTarget({ invokeMockDelayedCallback, get
 
     return {
       statusCode: 204,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      body: '',
     };
   };
 }
 
-export const delivery = configureContainer().build(makeDeliveryLambdaMockHttpInvokeTarget);
+export const delivery = container.build(makeDeliveryLambdaMockHttpInvokeTarget);

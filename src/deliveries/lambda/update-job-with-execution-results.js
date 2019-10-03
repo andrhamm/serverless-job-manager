@@ -5,28 +5,29 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
   updateJobWithExecutionResults,
 }) {
   return async function delivery(inputs) {
-    const input = Object.assign({}, ...inputs);
-
-    const {
-      jobStatic: {
-        exclusive,
-        guid,
-        key: jobKey,
-      },
-      jobExecution: {
-        name: jobExecutionName,
-        event: {
-          time: eventTime,
-        },
-        serviceInvokedAt,
-      },
+    const [
       jobExecutionResult,
-    } = input;
+      {
+        jobStatic: {
+          exclusive,
+          guid,
+          key: jobKey,
+        },
+        jobExecution: {
+          name: jobExecutionName,
+          event: {
+            time: eventTime,
+          },
+          serviceInvokedAt,
+        },
+      },
+    ] = inputs;
 
     const logger = getLogger();
     logger.addContext('guid', guid);
     logger.addContext('jobExecutionName', jobExecutionName);
-    logger.debug(`event: ${JSON.stringify(inputs)}`);
+    logger.addContext('input', inputs);
+    logger.debug('start');
 
     let updatedJob = {};
 

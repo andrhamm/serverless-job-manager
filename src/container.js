@@ -3,6 +3,7 @@ import {
 } from 'awilix';
 
 import { makeAwaitStateMachineExecution } from './actions/await-state-machine-execution';
+import { makeGetFailedExecutions } from './actions/get-failed-executions';
 import { makeGetHttpClient } from './infra/http';
 import { makeGetJobByKey } from './actions/get-job-by-key';
 import { makeGetJobExecutionByExecutionKey } from './actions/get-job-execution-by-execution-key';
@@ -73,6 +74,7 @@ export default function configureContainer() {
   // Actions
   container.register({
     awaitStateMachineExecution: asFunction(makeAwaitStateMachineExecution),
+    getFailedExecutions: asFunction(makeGetFailedExecutions),
     getJobByKey: asFunction(makeGetJobByKey),
     getJobExecutionByExecutionKey: asFunction(makeGetJobExecutionByExecutionKey),
     getJobKeyByGuid: asFunction(makeGetJobKeyByGuid),
