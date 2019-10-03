@@ -14,7 +14,8 @@ function makeDeliveryLambdaDeleteJob({ softDeleteJob, getLogger }) {
 
     const logger = getLogger();
     logger.addContext('jobKey', jobKey);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     await softDeleteJob(jobKey);
 

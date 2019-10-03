@@ -4,8 +4,8 @@ import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 function makeDeliveryLambdaSearchJobsByService({ searchJobsByService, getLogger }) {
   return async function delivery(input) {
     const logger = getLogger();
-    // logger.addContext('jobKey', jobKey);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const {
       pathParameters,

@@ -6,7 +6,8 @@ function makeDeliveryLambdaGetJobKeyByGuid({ getJobKeyByGuid, getLogger }) {
 
     const logger = getLogger();
     logger.addContext('guid', jobGuid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const jobKey = await getJobKeyByGuid(jobGuid);
 

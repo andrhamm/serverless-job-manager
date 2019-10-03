@@ -12,7 +12,8 @@ function makeDeliveryLambdaSaveCallbackTaskToken({
 
     const logger = getLogger();
     // logger.addContext('guid', guid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const res = await updateJobExecutionCallbackTaskToken(jobExecutionKey, callbackTaskToken);
 

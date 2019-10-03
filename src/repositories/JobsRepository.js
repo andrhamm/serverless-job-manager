@@ -381,6 +381,7 @@ class JobsRepository {
         ':null': null,
         ':nulltype': 'NULL',
         ':lastSuccessfulExecution': {
+          // should only be success results
           ...jobExecutionResult,
           name: jobExecutionName,
           scheduledTime,

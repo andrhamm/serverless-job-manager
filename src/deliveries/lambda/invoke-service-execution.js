@@ -1,7 +1,9 @@
-import { inspect } from 'util';
 import configureContainer from '../../container';
 
-function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getLogger }) {
+function makeDeliveryLambdaInvokeServiceExecution({
+  invokeServiceExecution,
+  getLogger,
+}) {
   return async function delivery(input) {
     const {
       jobStatic: {
@@ -26,7 +28,8 @@ function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getL
 
     const logger = getLogger();
     logger.addContext('guid', jobGuid);
-    logger.debug(`event: ${inspect(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const {
       serviceInvokedAtMs,
@@ -46,6 +49,7 @@ function makeDeliveryLambdaInvokeServiceExecution({ invokeServiceExecution, getL
 
     const output = { ...input };
     output.jobExecution.serviceInvokedAt = parseInt(serviceInvokedAtMs / 1000, 10);
+    output.jobExecution.serviceInvokedAtMs = serviceInvokedAtMs;
     output.jobExecution.serviceInvocationResponse = serviceInvocationResponse;
 
     return output;

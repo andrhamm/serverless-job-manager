@@ -34,19 +34,24 @@ export const makeInvokeServiceExecution = ({
   const serviceEvent = snakeCaseObj({
     callbackUrl,
     jobName,
-    lastSuccessfulExecution: snakeCaseObj(lastSuccessfulExecution),
+    lastSuccessfulExecution: snakeCaseObj({
+      ...lastSuccessfulExecution,
+      scheduled_time_ms: (new Date(lastSuccessfulExecution.scheduledTime)).getTime(),
+    }),
     payload,
     schedule: ruleSchedule,
     scheduledTime: eventTime,
     scheduledTimeMs,
   });
 
-    // TODO: track this metric
+  logger.addContext('callbackUrl', callbackUrl);
+  logger.addContext('serviceExecutionPayload', serviceEvent);
+
+  // TODO: track this metric
   const serviceInvokedAtMs = Date.now();
   const lagMs = serviceInvokedAtMs - scheduledTimeMs;
   const lagPct = ((lagMs / (ttlSeconds * 1000)) * 100).toFixed(1);
-  logger.addContext('callbackUrl', callbackUrl);
-  logger.addContext('serviceExecutionPayload', serviceEvent);
+
   logger.debug(`Invoking service job execution with ${lagMs}ms latency (${lagPct}% of ${ttlSeconds}s ttl, (POST ${invocationTarget})`);
 
   // TODO: configure request timeout, etc
@@ -54,7 +59,11 @@ export const makeInvokeServiceExecution = ({
   // TODO: add support for `sync` jobs (response to this call is the result of the job)
   const result = await http(invocationTarget, {
     method: 'post',
-    body: JSON.stringify(serviceEvent),
+    body: JSON.stringify({
+      ...serviceEvent,
+      invocation_latency_ms: lagMs,
+      invocation_latency_pct: lagPct,
+    }),
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',

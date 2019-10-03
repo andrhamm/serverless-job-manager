@@ -11,7 +11,8 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
   return async function delivery(input, context, callback) {
     const logger = getLogger();
     // logger.addContext('guid', guid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     let {
       stateMachineArn: givenStateMachineArn,

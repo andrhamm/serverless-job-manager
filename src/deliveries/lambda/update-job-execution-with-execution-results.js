@@ -18,7 +18,8 @@ function makeDeliveryLambdaUpdateJobExecutionWithExecutionResults({
 
     const logger = getLogger();
     logger.addContext('guid', jobStatic.guid);
-    logger.debug(`event: ${JSON.stringify(inputs)}`);
+    logger.addContext('input', inputs);
+    logger.debug('start');
 
     const updatedJobExecution = await updateJobExecutionWithExecutionResults(
       jobExecutionKey,

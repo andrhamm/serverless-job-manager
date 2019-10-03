@@ -6,8 +6,8 @@ function makeDeliveryLambdaUpdateAwaitCallbackActivityStatus({
 }) {
   return async function delivery(inputs) {
     const logger = getLogger();
-    // logger.addContext('guid', guid);
-    logger.debug(`event: ${JSON.stringify(inputs)}`);
+    logger.addContext('input', inputs);
+    logger.debug('start');
 
     const input = Object.assign({}, ...inputs);
     const {

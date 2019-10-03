@@ -5,8 +5,8 @@ function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
   // eslint-disable-next-line consistent-return
   return async function delivery(input) {
     const logger = getLogger();
-    // logger.addContext('jobKey', jobKey);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     const {
       multiValueQueryStringParameters,

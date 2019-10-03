@@ -28,8 +28,9 @@
     "status": {
       "type": "string",
       "enum": [
-        "success",
-        "fail"
+        "fail",
+        "heartbeat",
+        "success"
       ]
     },
     "summary": {

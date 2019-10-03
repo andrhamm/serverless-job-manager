@@ -9,7 +9,8 @@ function makeDeliveryLambdaUpdateJobScheduleTargets({ updateJobScheduleTargets, 
 
     const logger = getLogger();
     logger.addContext('guid', jobStatic.guid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     await updateJobScheduleTargets(ruleName, jobStatic);
 

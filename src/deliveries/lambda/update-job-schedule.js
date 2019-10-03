@@ -6,8 +6,8 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
   // eslint-disable-next-line consistent-return
   return async function delivery(input) {
     const logger = getLogger();
-    // logger.addContext('guid', guid);
-    logger.debug(`event: ${JSON.stringify(input)}`);
+    logger.addContext('input', input);
+    logger.debug('start');
 
     // API Gateway doesn't let you require a specific content-type, so if
     // it is not json, the jsonschema validation will not have been applied

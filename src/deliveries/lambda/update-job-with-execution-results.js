@@ -31,7 +31,7 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
 
     let updatedJob = {};
 
-    if (exclusive) {
+    if (exclusive && jobExecutionResult.status === 'success') {
       updatedJob = await updateJobWithExecutionResults(
         jobKey,
         jobExecutionName,
