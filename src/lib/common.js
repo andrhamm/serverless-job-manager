@@ -37,6 +37,24 @@ function delay(delayMs) {
   return new Promise(resolve => setTimeout(resolve, delayMs));
 }
 
+function requireJson(headers) {
+  const contentType = 'application/json';
+
+  // API Gateway doesn't let you require a specific content-type, so if
+  // it is not json, the jsonschema validation will not have been applied
+  if (!Object.entries(headers).find(([k, v]) => (
+    k.toLowerCase() === 'content-type' && v.startsWith(contentType)
+  ))) {
+    return {
+      statusCode: 415,
+      headers: { 'Content-Type': contentType },
+      body: `{"message":"Invalid content-type. Must begin with \\"${contentType}\\""}`,
+    };
+  }
+
+  return null;
+}
+
 export {
   camelCase,
   camelCaseObj,
@@ -44,6 +62,7 @@ export {
   delay,
   filterProps,
   mapKeys,
+  requireJson,
   snakeCase,
   snakeCaseObj,
 };

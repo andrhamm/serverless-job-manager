@@ -212,6 +212,7 @@ export const jobExecutionResultPropNames = [
   'state',
   'status',
   'summary',
+  'error',
 ];
 
 export function filterJobExecutionResult(jobExecutionResult) {

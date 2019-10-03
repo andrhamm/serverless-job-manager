@@ -1,7 +1,6 @@
 import configureContainer from '../../container';
-import { camelCaseObj } from '../../lib/common';
+import { camelCaseObj, requireJson } from '../../lib/common';
 
-const contentType = 'application/json';
 
 function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
   // eslint-disable-next-line consistent-return
@@ -12,14 +11,9 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
 
     // API Gateway doesn't let you require a specific content-type, so if
     // it is not json, the jsonschema validation will not have been applied
-    if (!Object.entries(input.headers).find(([k, v]) => (
-      k.toLowerCase() === 'content-type' && v.startsWith(contentType)
-    ))) {
-      return {
-        statusCode: 415,
-        headers: { 'Content-Type': contentType },
-        body: `{"message":"Invalid content-type. Must begin with \\"${contentType}\\""}`,
-      };
+    const notJson = requireJson(input.headers);
+    if (notJson) {
+      return notJson;
     }
 
     // TODO: validate w/ jsonschema!

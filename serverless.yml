@@ -239,7 +239,9 @@ functions:
       - http:
           path: callback/{jobGuid}/{encodedJobExecutionKey}
           method: post
-          authorizer: aws_iam
+          request:
+            schema:
+              application/json: ${file(src/lib/jsonschema/service-execution-callback.json)}
   mockHttpInvokeTarget:
     handler: src/deliveries/lambda/mock-http-invoke-target.delivery
     description: Endpoint for testing HTTP invoke target
@@ -249,7 +251,6 @@ functions:
       - http:
           path: http-invoke
           method: post
-          authorizer: aws_iam
 
 stepFunctions:
   stateMachines:
@@ -306,8 +307,9 @@ stepFunctions:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-getJobLock
             Parameters:
-              input.$: $$.Execution.Input
               executionName.$: $$.Execution.Name
+              executionInput.$: $$.Execution.Input
+            ResultPath: $
             Retry:
             - ErrorEquals:
               - ConditionalCheckFailedException
@@ -323,8 +325,8 @@ stepFunctions:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-insertJobExecution
             Parameters:
-              input.$: $$.Execution.Input
               executionName.$: $$.Execution.Name
+              executionInput.$: $
             Next: AwaitCallback
           AwaitCallback:
             Type: Parallel
