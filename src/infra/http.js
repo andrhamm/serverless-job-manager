@@ -1,9 +1,5 @@
-import axios from 'axios';
+import fetch from 'node-fetch';
 
-export const makeGetHttpClient = ({ apiBaseUrl }) => function getHttpClient() {
-  const instance = axios.create({
-    baseURL: apiBaseUrl,
-  });
-
-  return instance;
+export const makeGetHttpClient = () => function getHttpClient() {
+  return fetch;
 };

@@ -30,11 +30,11 @@
     "async-retry": "^1.2.3",
     "awilix": "^4.2.2",
     "aws-sdk": "^2.528.0",
-    "axios": "^0.18.1",
     "lodash.camelcase": "^4.3.0",
     "lodash.mapkeys": "^4.6.0",
     "lodash.snakecase": "^4.1.1",
     "log4js": "^5.1.0",
+    "node-fetch": "^2.6.0",
     "p-queue": "^5.0.0",
     "source-map-support": "^0.5.13",
     "uuid": "^3.3.3"

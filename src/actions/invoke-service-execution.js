@@ -1,5 +1,5 @@
-import { snakeCaseObj } from '../lib/common';
 import { encodeJobExecutionKey } from '../lib/job_executions_utils';
+import { snakeCaseObj } from '../lib/common';
 
 export const makeInvokeServiceExecution = ({
   getHttpClient,
@@ -24,16 +24,17 @@ export const makeInvokeServiceExecution = ({
     throw new Error('Unsupported invocation type');
   }
 
-  const client = getHttpClient();
+  const http = getHttpClient();
   const scheduledTime = new Date(eventTime);
   const scheduledTimeMs = scheduledTime.getTime();
   const encodedJobExecutionKey = encodeJobExecutionKey(jobExecutionKey);
   // TODO: add path as env var using cloudformation var
   const callbackUrl = `${apiBaseUrl}/callback/${encodeURIComponent(jobGuid)}/${encodeURIComponent(encodedJobExecutionKey)}`;
+
   const serviceEvent = snakeCaseObj({
     callbackUrl,
     jobName,
-    lastSuccessfulExecution,
+    lastSuccessfulExecution: snakeCaseObj(lastSuccessfulExecution),
     payload,
     schedule: ruleSchedule,
     scheduledTime: eventTime,
@@ -45,17 +46,30 @@ export const makeInvokeServiceExecution = ({
   const lagMs = serviceInvokedAtMs - scheduledTimeMs;
   const lagPct = ((lagMs / (ttlSeconds * 1000)) * 100).toFixed(1);
   logger.addContext('callbackUrl', callbackUrl);
-  logger.debug(`Invoking service job execution with ${lagMs}ms latency (${lagPct}% of ${ttlSeconds}s ttl):\nPOST ${invocationTarget}\n${JSON.stringify(serviceEvent)}`);
+  logger.addContext('serviceExecutionPayload', serviceEvent);
+  logger.debug(`Invoking service job execution with ${lagMs}ms latency (${lagPct}% of ${ttlSeconds}s ttl, (POST ${invocationTarget})`);
 
   // TODO: configure request timeout, etc
   // TODO: validate status
   // TODO: add support for `sync` jobs (response to this call is the result of the job)
-  const { status, statusText, data } = await client.post(invocationTarget, serviceEvent);
+  const result = await http(invocationTarget, {
+    method: 'post',
+    body: JSON.stringify(serviceEvent),
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+  });
 
-  logger.debug(`${status} ${statusText} ${data ? JSON.stringify(data) : ''}`);
+  const { status, statusText } = result;
+
+  const body = await result.text();
+
+  logger.debug(`${status} ${statusText}: ${body}`);
 
   return {
     serviceInvokedAtMs,
     serviceInvocationResponse: status,
   };
 };
+

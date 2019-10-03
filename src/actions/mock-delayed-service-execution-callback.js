@@ -5,7 +5,7 @@ export const makeMockDelayedServiceExecutionCallback = ({
   getHttpClient,
   getLogger,
 }) => async function mockDelayedServiceExecutionCallback(callbackUrl) {
-  const client = getHttpClient();
+  const http = getHttpClient();
   const logger = getLogger();
 
   const delayMs = Math.floor(((Math.random() * 3) + 1) * 1000);
@@ -17,19 +17,28 @@ export const makeMockDelayedServiceExecutionCallback = ({
   const correlationId = uuidv5(callbackUrl, uuidv5.URL);
   const success = Math.random() >= 0.5;
 
-  const result = snakeCaseObj({
+  const resultJson = JSON.stringify(snakeCaseObj({
     correlationId,
-    state: snakeCaseObj({ delayMs }),
+    state: JSON.stringify(snakeCaseObj({ delayMs })),
     status: success ? 'success' : 'fail',
     summary: success ? 'Success summary text' : 'Error cause description',
-    error: success ? null : 'Internal Server Error',
+    error: success ? undefined : 'Internal Server Error',
+  }));
+
+  logger.debug(`Delay complete, posting mock ${success ? 'success' : 'failure'} correlationId=${correlationId}\n${resultJson}`);
+
+  const res = await http(callbackUrl, {
+    method: 'post',
+    body: resultJson,
+    headers: {
+      'Content-Type': 'application/json',
+    },
   });
 
-  logger.debug(`Delay complete, posting mock ${success ? 'success' : 'failure'} correlationId=${correlationId}\n${JSON.stringify(result)}`);
+  const { status, statusText } = res;
+  const body = await res.text();
 
-  const { status, data } = await client.post(callbackUrl, result, { validateStatus: false });
-
-  logger.debug(`Mock post response (${status}: ${JSON.stringify(data)}`);
+  logger.debug(`Mock post response (${status} ${statusText}): ${body}`);
 
   return true;
 };
