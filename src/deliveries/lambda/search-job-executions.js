@@ -1,5 +1,5 @@
 import configureContainer from '../../container';
-import { camelCaseObj, snakeCaseObj } from '../../lib/common';
+import { camelCaseObj, snakeCaseObj, requireJson } from '../../lib/common';
 
 function makeDeliveryLambdaSearchJobExecutions({ searchJobExecutions, getLogger }) {
   return async function delivery(input) {
@@ -8,39 +8,53 @@ function makeDeliveryLambdaSearchJobExecutions({ searchJobExecutions, getLogger 
     logger.debug('start');
 
     const {
-    // resource,
-    // pathParameters,
-    // multiValueQueryStringParameters,
-      queryStringParameters,
       body: bodyJson,
+      httpMethod,
+      queryStringParameters,
     } = input;
 
-    // TODO: req validation w/ jsonschema
-    const body = camelCaseObj(JSON.parse(bodyJson || '{}'));
-    const params = camelCaseObj(queryStringParameters || {});
-    // const multiParams = camelCaseObj(multiValueQueryStringParameters || {});
+    // API Gateway doesn't let you require a specific content-type, so if
+    // it is not json, the jsonschema validation will not have been applied
+    let bodyParams = {};
+    if (httpMethod !== 'GET' && bodyJson) {
+      const notJson = requireJson(input.headers);
+      if (notJson) {
+        return notJson;
+      }
+
+      bodyParams = camelCaseObj(JSON.parse(bodyJson));
+    }
+
+    const queryParams = camelCaseObj(queryStringParameters || {});
+
+    const params = {
+      ...queryParams,
+      ...bodyParams,
+    };
+
     const {
-      since,
-      serviceName,
       jobName,
+      more: moreToken,
+      serviceName,
+      since,
     } = params;
 
     const {
       results,
       sinceMs,
-      moreToken,
+      moreToken: newMoreToken,
     } = await searchJobExecutions({
-      since,
-      serviceName,
       jobName,
-      moreToken: body.more,
+      moreToken,
+      serviceName,
+      since,
     });
 
     const response = {
       count: results.length,
       since: sinceMs,
       paging: {
-        more: moreToken,
+        more: newMoreToken,
       },
       // TODO: filter response
       results: results.map((result) => {

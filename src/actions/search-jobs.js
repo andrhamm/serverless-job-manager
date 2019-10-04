@@ -5,6 +5,7 @@ export const makeSearchJobs = ({
 }) => async function searchJobs({
   jobGuids,
   jobKeys,
+  serviceName,
 }) {
   let results = [];
 
@@ -53,8 +54,8 @@ export const makeSearchJobs = ({
     // console.log(`queue idle`);
     }
   } else {
-    // return all jobs
-    results = jobsRepository.scanJobs();
+    // return all jobs, or if serviceName is truthy, jobs for that service
+    results = jobsRepository.scanJobs(serviceName);
   }
 
   return results;

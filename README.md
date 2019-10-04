@@ -17,7 +17,10 @@ The service consists of several components:
 * A NoSQL document data store (DynamoDB)
   * A table for Jobs - the configuration of scheduled recurring jobs
   * A table for Job Executions - the record of each "run" of a job and the result
-* Lambdas, Step Functions, etc
+* State Machines (backed by AWS Step Functions)
+* Lambdas, etc
+
+
 
 ---
 
@@ -133,6 +136,107 @@ POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_
   "status": "heartbeat"
 }
 ```
+
+### Viewing jobs and execution history
+
+There are HTTP endpoints for retreiving job configurations and their execution history. You can also view executions and their output in the [AWS Console on the Step Functions service page](https://console.aws.amazon.com/states/home?region=us-east-1#/statemachines). The UI is very handy for viewing the flow of events in the course of a job execution, for both historical and in progress executions.
+
+![AWS Step Functions for Job Executions](https://user-images.githubusercontent.com/591537/66218238-c7053180-e696-11e9-93ed-d23fca3c759d.png)
+
+#### Get jobs
+
+Note: Supports GET or POST, with params in query string or in a JSON body. It is possible to make multiple searches in a single request by passing arrays for these values (see second example).
+
+Possible combinations of parameters:
+
+* no params: get all jobs
+* `service_name` (single string): get all jobs for this service
+* `service_name` + `job_name` (single string for each or congruent arrays of strings)
+* `job_guid` (single string or array of strings)
+
+```text
+Accept: application/json
+Content-Type: application/json
+POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/jobs
+
+{
+  "job_name": "my-job-42",
+  "service_name": "my-serv",
+  "job_guid": "a732c557-f64e-5b40-8b3d-d6cd609ee8cf"
+}
+```
+
+#### Get job executions
+
+Note: Supports GET or POST, with params in query string or in a JSON body. When there are more results than the response provides, a token is returned (`paging.more`) which can be used in the next request in order to get the next page of results. Be aware that the number of results on each page can be anywhere from **0 to 100**, but if a `more` token is present, it means **there are more results** in the result set.
+
+```text
+Accept: application/json
+Content-Type: application/json
+POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/executions
+
+{
+  "job_name": "my-job-42",
+  "more": "<value of paging.more from previous search response>",
+  "service_name": "my-serv",
+  "since": 1568688960000
+}
+```
+
+---
+
+## Deployment
+
+Take care to use the correct AWS Credential "profile". By default, this service assumes you have the credentials set in `~/.aws/credentials` with the profile name equal to that environment's AWS Account Name (`gasbuddy-staging`). If your profiles are named differently, be sure to use the `--profile` argument.
+
+Note: Run these commands in the `serverless` directory
+
+```bash
+serverless deploy --stage [stage|prod]
+```
+
+Specify profile override
+
+```bash
+serverless deploy --stage stage --profile gasbuddy-staging
+```
+
+## Logs
+
+Logs are located in CloudWatch Logs, but are also forwarded to ELK/Kibana. They can be viewed from your browser via the AWS Console:
+
+* [`prefix=/aws/lambda/serverless-job-manager-*`](https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#logs:prefix=/aws/lambda/serverless-job-manager-)
+
+You can interactively tail the logs for a given Lambda function by using the Serverless command line tools like so:
+
+```bash
+serverless logs -f <function_name> -t
+```
+
+i.e.
+
+```bash
+serverless logs -f fetch_recalls -t
+```
+
+## Development
+
+Note: Run these commands in the root directory where `serverless.yml` is located.
+
+Lambdas can be invoked locally as long as your local environment has AWS credentials with the required IAM roles and permissions. Invoke locally and optionally specify event data like so:
+
+```bash
+serverless invoke local -f getJob -d '{"jobStatic":{"guid":"foobar","key": {...}}}'
+```
+
+For more advanced options when invoking locally, see the [Serverless Doc: Invoke Local](https://serverless.com/framework/docs/providers/aws/cli-reference/invoke-local/)
+
+You may find it useful to grok some of our other Serverless projects:
+
+* [gas-buddy/nhtsa-recalls-serv](https://github.com/gas-buddy/nhtsa-recalls-serv)
+* [gas-buddy/cloudwatch-logs-elk-forwarder](https://github.com/gas-buddy/cloudwatch-logs-elk-forwarder)
+* [gas-buddy/poi-serv-elasticsearch-proxy](https://github.com/gas-buddy/poi-serv-elasticsearch-proxy)
+* [gas-buddy/loyalty-api/loyalty-api-events](https://github.com/gas-buddy/loyalty-api/tree/master/serverless)
 
 ---
 ---

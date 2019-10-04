@@ -172,9 +172,7 @@ functions:
       - http:
           path: services/{serviceName}/jobs
           method: get
-      - http:
-          path: services/{serviceName}/jobs
-          method: post
+          authorizer: aws_iam
   searchJobs:
     handler: src/deliveries/lambda/search-jobs.delivery
     description: Read endpoint for jobs
@@ -182,10 +180,14 @@ functions:
       - http:
           path: jobs
           method: get
+          authorizer: aws_iam
       - http:
           path: jobs
           method: post
-
+          authorizer: aws_iam
+          request:
+            schema:
+              application/json: ${file(src/lib/jsonschema/search-jobs.json)}
   searchJobExecutions:
     handler: src/deliveries/lambda/search-job-executions.delivery
     description: Read endpoint for job executions
@@ -193,21 +195,36 @@ functions:
       - http:
           path: executions
           method: get
+          authorizer: aws_iam
       - http:
           path: services/{serviceName}/executions
           method: get
+          authorizer: aws_iam
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: get
+          authorizer: aws_iam
       - http:
           path: executions
           method: post
+          authorizer: aws_iam
+          request:
+            schema:
+              application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
       - http:
           path: services/{serviceName}/executions
           method: post
+          authorizer: aws_iam
+          request:
+            schema:
+              application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: post
+          authorizer: aws_iam
+          request:
+            schema:
+              application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
   putJob:
     handler: src/deliveries/lambda/await-state-machine-execution.delivery
     description: Idempotent job create/update

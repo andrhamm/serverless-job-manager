@@ -34,10 +34,10 @@ export const makeInvokeServiceExecution = ({
   const serviceEvent = snakeCaseObj({
     callbackUrl,
     jobName,
-    lastSuccessfulExecution: snakeCaseObj({
+    lastSuccessfulExecution: lastSuccessfulExecution ? snakeCaseObj({
       ...lastSuccessfulExecution,
       scheduled_time_ms: (new Date(lastSuccessfulExecution.scheduledTime)).getTime(),
-    }),
+    }) : {},
     payload,
     schedule: ruleSchedule,
     scheduledTime: eventTime,

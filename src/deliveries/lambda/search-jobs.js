@@ -1,5 +1,5 @@
 import configureContainer from '../../container';
-import { camelCaseObj, snakeCaseObj } from '../../lib/common';
+import { camelCaseObj, snakeCaseObj, requireJson } from '../../lib/common';
 
 function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
   // eslint-disable-next-line consistent-return
@@ -9,14 +9,45 @@ function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
     logger.debug('start');
 
     const {
+      body: bodyJson,
+      httpMethod,
       multiValueQueryStringParameters,
     } = input;
+
+    // API Gateway doesn't let you require a specific content-type, so if
+    // it is not json, the jsonschema validation will not have been applied
+    let bodyParams = {};
+    if (httpMethod !== 'GET' && bodyJson) {
+      const notJson = requireJson(input.headers);
+      if (notJson) {
+        return notJson;
+      }
+
+      bodyParams = camelCaseObj(JSON.parse(bodyJson));
+    }
+
+    ['jobGuid', 'serviceName', 'jobName'].forEach((k) => {
+      if (bodyParams[k]) {
+        if (!Array.isArray(bodyParams[k])) {
+          bodyParams[k] = [bodyParams[k]];
+        }
+      } else {
+        bodyParams[k] = [];
+      }
+    });
+
+    const queryParams = camelCaseObj(multiValueQueryStringParameters || {});
+
+    const params = {
+      ...queryParams,
+      ...bodyParams,
+    };
 
     const {
       jobGuid: jobGuids,
       jobName: jobNames,
       serviceName: serviceNames,
-    } = camelCaseObj(multiValueQueryStringParameters || {});
+    } = params;
 
     const args = {};
     if (jobGuids) {
@@ -42,6 +73,7 @@ function makeDeliveryLambdaSearchJobs({ searchJobs, getLogger }) {
       args.jobKeys = jobKeys;
     } else {
       // all jobs
+      args.serviceName = (serviceNames || [])[0];
     }
 
     const results = await searchJobs(args);
