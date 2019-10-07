@@ -21,6 +21,11 @@ function makeDeliveryLambdaUpdateJobExecutionWithExecutionResults({
     logger.addContext('input', inputs);
     logger.debug('start');
 
+    // tolerate passing objects for this property but convert to string
+    if (jobExecutionResult.error && !(typeof jobExecutionResult.error === 'string' || jobExecutionResult.error instanceof String)) {
+      jobExecutionResult.error = JSON.stringify(jobExecutionResult.error);
+    }
+
     const updatedJobExecution = await updateJobExecutionWithExecutionResults(
       jobExecutionKey,
       serviceInvokedAt,
