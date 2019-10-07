@@ -27,6 +27,16 @@
                 }
             ]
         },
+        "progress": {
+          "anyOf": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
         "state": {
             "anyOf": [
                 {

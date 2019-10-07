@@ -124,7 +124,7 @@ POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_
 
 #### Job execution still in progress (heartbeat)
 
-If the job is running longer than expected as defined by the job's `ttl_seconds` configuration, the service must perform a heartbeat callback to extend the execution's TTL. This will extend the execution by `ttl_seconds` seconds.
+If the job is running longer than expected as defined by the job's `ttl_seconds` configuration, the service must perform a heartbeat callback to extend the execution's TTL. This will extend the execution by `ttl_seconds` seconds. Optionally provide a `progress` indicator (integer, 0-100).
 
 Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
 
@@ -133,7 +133,24 @@ Content-Type: application/json
 POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
 
 {
-  "status": "processing"
+  "status": "processing",
+  "progress": 73
+}
+```
+
+#### Job execution has completed (fail)
+
+Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
+
+```text
+Content-Type: application/json
+POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+
+{
+  "correlation_id": "foobar",
+  "error": "My error and maybe a stack trace, could be JSON encoded object or whatever",
+  "status": "fail",
+  "summary": "A summary of the error"
 }
 ```
 
