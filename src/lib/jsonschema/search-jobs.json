@@ -2,20 +2,18 @@
     "definitions": {},
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
-    "title": "The Root Schema",
-    "required": [],
+    "title": "Search Jobs",
     "properties": {
         "job_guid": {
             "anyOf": [
                 {
-                    "type": "string",
+                    "type": "string", 
                     "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
                 },
                 {
                     "type": "array",
-                    "maxItems": 100,
                     "items": {
-                        "type": "string",
+                        "type": "string", 
                         "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
                     }
                 }
@@ -28,7 +26,6 @@
                 },
                 {
                     "type": "array",
-                    "maxItems": 100,
                     "items": {
                         "type": "string"
                     }
@@ -42,7 +39,6 @@
                 },
                 {
                     "type": "array",
-                    "maxItems": 100,
                     "items": {
                         "type": "string"
                     }

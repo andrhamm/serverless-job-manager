@@ -1,34 +1,48 @@
 {
-  "definitions": {},
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "type": "object",
-  "title": "The Root Schema",
-  "required": [
-  ],
-  "properties": {
-    "job_name": {
-      "anyOf": [
-          { "type": "string" },
-          { "type": "null" }
-      ]
-    },
-    "more": {
-      "anyOf": [
-          { "type": "string" },
-          { "type": "null" }
-      ]
-    },
-    "service_name": {
-      "anyOf": [
-          { "type": "string" },
-          { "type": "null" }
-      ]
-    },
-    "since": {
-      "anyOf": [
-          { "type": "integer" },
-          { "type": "null" }
-      ]
+    "definitions": {},
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "title": "Search Job Executions",
+    "properties": {
+        "job_name": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "more": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "service_name": {
+            "anyOf": [
+                {
+                    "type": "string"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        },
+        "since": {
+            "anyOf": [
+                {
+                    "type": "integer"
+                },
+                {
+                    "type": "null"
+                }
+            ]
+        }
     }
-  }
 }
