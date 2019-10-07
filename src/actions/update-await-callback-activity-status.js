@@ -16,7 +16,7 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
     //   params.cause = summary;
     //   params.error = error;
     //   break;
-      case 'heartbeat':
+      case 'processing': // (heartbeat)
         method = 'sendTaskHeartbeat';
         break;
       case 'success':

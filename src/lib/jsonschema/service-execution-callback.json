@@ -41,7 +41,7 @@
             "type": "string",
             "enum": [
                 "fail",
-                "heartbeat",
+                "processing",
                 "success"
             ]
         },

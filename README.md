@@ -133,7 +133,7 @@ Content-Type: application/json
 POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
 
 {
-  "status": "heartbeat"
+  "status": "processing"
 }
 ```
 
