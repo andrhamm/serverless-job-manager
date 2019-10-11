@@ -5,6 +5,7 @@ export const makeInvokeServiceExecution = ({
   getHttpClient,
   getLogger,
   apiBaseUrl,
+  callbackHeartbeatIntervalSeconds,
 }) => async function invokeServiceExecution({
   eventTime,
   invocationTarget,
@@ -31,8 +32,14 @@ export const makeInvokeServiceExecution = ({
   // TODO: add path as env var using cloudformation var
   const callbackUrl = `${apiBaseUrl}/callback/${encodeURIComponent(jobGuid)}/${encodeURIComponent(encodedJobExecutionKey)}`;
 
+  const heartbeatIntervalSeconds = Math.min([
+    Math.max(30, Math.floor(ttlSeconds / 10)),
+    Math.floor(callbackHeartbeatIntervalSeconds * 0.8),
+  ]) || callbackHeartbeatIntervalSeconds;
+
   const serviceEvent = snakeCaseObj({
     callbackUrl,
+    heartbeatIntervalSeconds,
     jobName,
     lastSuccessfulExecution: lastSuccessfulExecution ? snakeCaseObj({
       ...lastSuccessfulExecution,
@@ -42,6 +49,7 @@ export const makeInvokeServiceExecution = ({
     schedule: ruleSchedule,
     scheduledTime: eventTime,
     scheduledTimeMs,
+    ttlSeconds,
   });
 
   logger.addContext('callbackUrl', callbackUrl);
@@ -77,6 +85,7 @@ export const makeInvokeServiceExecution = ({
   logger.debug(`${status} ${statusText}: ${body}`);
 
   return {
+    heartbeatIntervalSeconds,
     serviceInvokedAtMs,
     serviceInvocationResponse: status,
   };

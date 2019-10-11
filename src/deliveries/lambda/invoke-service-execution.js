@@ -32,6 +32,7 @@ function makeDeliveryLambdaInvokeServiceExecution({
     logger.debug('start');
 
     const {
+      heartbeatIntervalSeconds,
       serviceInvokedAtMs,
       serviceInvocationResponse,
     } = await invokeServiceExecution({
@@ -48,6 +49,7 @@ function makeDeliveryLambdaInvokeServiceExecution({
     });
 
     const output = { ...input };
+    output.jobExecution.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
     output.jobExecution.serviceInvokedAt = parseInt(serviceInvokedAtMs / 1000, 10);
     output.jobExecution.serviceInvokedAtMs = serviceInvokedAtMs;
     output.jobExecution.serviceInvocationResponse = serviceInvocationResponse;

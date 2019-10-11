@@ -3,6 +3,7 @@ import {
 } from 'awilix';
 
 import { makeAwaitStateMachineExecution } from './actions/await-state-machine-execution';
+import { makeExtendJobLockByJobKey } from './actions/extend-job-lock-by-job-key';
 import { makeGetFailedExecutions } from './actions/get-failed-executions';
 import { makeGetHttpClient } from './infra/http';
 import { makeGetJobByKey } from './actions/get-job-by-key';
@@ -31,14 +32,14 @@ import JobsRepository from './repositories/JobsRepository';
 
 // @see https://github.com/talyssonoc/node-api-boilerplate/blob/master/src/container.js
 
-function requireEnvVar(envVarName) {
+function requireEnvVar(envVarName, castToInt = false) {
   const val = process.env[envVarName];
 
   if (!val) {
     throw new Error(`${envVarName} is not defined.`);
   }
 
-  return val;
+  return castToInt ? parseInt(val, 10) : val;
 }
 
 export default function configureContainer() {
@@ -53,11 +54,12 @@ export default function configureContainer() {
   // Environment Variables
   container.register({
     apiBaseUrl: asFunction(() => requireEnvVar('API_BASE')),
+    callbackHeartbeatIntervalSeconds: asFunction(() => requireEnvVar('CALLBACK_HEARTBEAT_INTERVAL_SECONDS', true)),
     cloudwatchEventsRulePrefix: asFunction(() => requireEnvVar('CLOUDWATCH_EVENTS_RULE_PREFIX')),
     iamRoleArnCloudwatchEvents: asFunction(() => requireEnvVar('IAM_ROLE_ARN_CLOUDWATCH_EVENTS')),
     indexNameJobsGuid: asFunction(() => requireEnvVar('DYNAMODB_INDEX_NAME_JOBS_GUID')),
     lambdaArnMockDelayedCallback: asFunction(() => requireEnvVar('LAMBDA_ARN_MOCK_DELAYED_CALLBACK')),
-    partitionCountJobExecutions: asFunction(() => requireEnvVar('DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS')),
+    partitionCountJobExecutions: asFunction(() => requireEnvVar('DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS', true)),
     stackName: asFunction(() => requireEnvVar('STACK_NAME')),
     stateMachineArn: asFunction(() => requireEnvVar('STATE_MACHINE_ARN')),
     stateMachineArnExecuteJob: asFunction(() => requireEnvVar('STATE_MACHINE_ARN_EXECUTE_JOB')),
@@ -74,6 +76,7 @@ export default function configureContainer() {
   // Actions
   container.register({
     awaitStateMachineExecution: asFunction(makeAwaitStateMachineExecution),
+    extendJobLockByJobKey: asFunction(makeExtendJobLockByJobKey),
     getFailedExecutions: asFunction(makeGetFailedExecutions),
     getJobByKey: asFunction(makeGetJobByKey),
     getJobExecutionByExecutionKey: asFunction(makeGetJobExecutionByExecutionKey),

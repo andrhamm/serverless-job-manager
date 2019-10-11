@@ -2,15 +2,63 @@ import uuidv5 from 'uuid/v5';
 import { delay, snakeCaseObj } from '../lib/common';
 
 export const makeMockDelayedServiceExecutionCallback = ({
+  callbackHeartbeatIntervalSeconds,
   getHttpClient,
   getLogger,
-}) => async function mockDelayedServiceExecutionCallback(callbackUrl) {
+}) => async function mockDelayedServiceExecutionCallback({
+  callbackUrl,
+  heartbeatIntervalSeconds: heartbeatIntervalSecondsIn, // 60
+  requestTimeMs,
+  ttlSeconds, // this simulator works for executions up to 900 seconds
+}) {
   const http = getHttpClient();
   const logger = getLogger();
 
-  const delayMs = Math.floor(((Math.random() * 3) + 1) * 1000);
+  const doHeartbeat = progress => http(callbackUrl, {
+    method: 'post',
+    body: JSON.stringify({
+      status: 'processing',
+      progress,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
-  logger.debug(`Invoking callback after ${delayMs}ms: \n${callbackUrl}`);
+  const heartbeatIntervalSeconds = heartbeatIntervalSecondsIn || callbackHeartbeatIntervalSeconds;
+  const ttlMs = ttlSeconds * 1000;
+  const heartbeatIntervalMs = heartbeatIntervalSeconds * 1000;
+  // leave enough time to do success/fail callback
+  const stopHeartbeatsAtMs = (requestTimeMs + (ttlMs * 0.9)) - heartbeatIntervalMs;
+
+  logger.addContext('heartbeatIntervalSeconds', heartbeatIntervalSeconds);
+
+  // first heartbeat should be done basically right away
+  let delayMs = Math.floor(((Math.random() * 3) + 1) * 1000);
+  let progress;
+  let elapsedMs;
+
+  // do a heartbeat every heartbeatIntervalSeconds until ~ttlSeconds have passed
+  /* eslint-disable no-await-in-loop */
+  do {
+    elapsedMs = Date.now() - requestTimeMs;
+    progress = Math.floor((elapsedMs / ttlMs) * 100);
+
+    logger.debug(`Invoking heartbeat callback after ${delayMs}ms (${progress}%)...`);
+
+    // TODO: we're paying for idle compute time here... this would be better as a
+    // step function with a wait state
+    await delay(delayMs);
+
+    await doHeartbeat(progress);
+
+    delayMs = heartbeatIntervalMs;
+  } while (Date.now() < stopHeartbeatsAtMs);
+  /* eslint-enable no-await-in-loop */
+
+  await delay(delayMs);
+
+  logger.debug(`Invoking final callback after ${delayMs}ms: \n${callbackUrl}`);
 
   await delay(delayMs);
 

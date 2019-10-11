@@ -72,17 +72,18 @@ In body:
 * `invocation_type`: Currently only `http` is supported. In the future, we may add support for `sqs`, `rabbitmq`, etc.
 * `payload`: A static payload that will be sent with every execution invocation webhook. Must be a string (i.e. a JSON encoded value).
 * `schedule`: A valid [CloudWatch Events Schedule Expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html). Examples: `rate(6 hours)` and `cron(*/5 * * * ? *)`. Executions can be scheduled to run _at most_ once per minute. Precise invocation times are not supported. There will always be a short delay between the exact scheduled time and when the service receives the execution invocation webhook. If the use case does not demand a specific time of day, prefer using a `rate` over a `cron` expression. A `rate` expression should work for most cases. The main exception is when a service has many different jobs that need to be balanced to run at different times. Using common `rate` expressions (i.e. `rate(5 minutes)`, `rate(1 hour)`, `rate(6 hours)`) will allow the job manager to optimize scheduling for all jobs. Expressions use UTC time zone.
-* `ttl_seconds`: The duration, in seconds, before an execution is to be considered a failure. If an execution is expected to surpass this duration, the service must perform a heartbeat callback request to extend the timeout.
+* `ttl_seconds`: The estimated duration, in seconds, that executions of this job are expected to take, at most.
 
 ### Handling a job execution invocation webhook
 
-Services will receive job execution invocation webhoooks via an HTTP POST request to the URL specified in the job config's `invocation_target` property. The webhook will be received aproximately at the scheduled time, not precisely, perhaps within 30 seconds.
+Services will receive job execution invocation webhoooks via an HTTP POST request to the URL specified in the job config's `invocation_target` property. The webhook will be received aproximately at the scheduled time, not precisely, perhaps within 30 seconds. Following receipt of the webhook, the service must make heartbeat calls at the rate specified in `heartbeat_interval_seconds`.
 
 #### Example webhook request body (this is what the service receives)
 
 ```json
 {
   "callback_url": "https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/58c4be02-9b8e-5921-8a73-0694a51e4487/MTsyMDE5MDkyNy5wMDt0aGUtc2Vydjpub25leGNsdXNpdmUtam9iLTg4OjE1Njk1OTE5MDAwMDA6NTUwMzI1MGUtNTNjYy0yN2Y0LWE2MzctY2RlZTFkMWIyMDQ4",
+  "heartbeat_interval_seconds": 30,
   "invocation_latency_ms": 34310,
   "invocation_latency_pct": 28.8,
   "job_name": "my-job-1",
@@ -99,6 +100,24 @@ Services will receive job execution invocation webhoooks via an HTTP POST reques
   "schedule": "rate(5 minutes)",
   "scheduled_time_ms": 1569604200000,
   "scheduled_time": "2019-09-27T17:10:00Z"
+}
+```
+
+#### Job execution in progress (heartbeat)
+
+During the execution, the service must perform heartbeat callbacks at the rate specified in the `heartbeat_interval_seconds` property of the webhook. Failing to perform these heartbeat calls will result in the execution being marked as a failure. Optionally provide a `progress` indicator (integer, 0-100).
+
+An execution with the `heartbeat_interval_seconds` value of 30 should be making this call every 30 seconds starting from the time the execution webhook is received.
+
+Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
+
+```text
+Content-Type: application/json
+POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+
+{
+  "status": "processing",
+  "progress": 73
 }
 ```
 
@@ -119,22 +138,6 @@ POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_
   "state": "{\"duration\":1234, \"processed\":666}",
   "status": "success",
   "summary": "Processed 666 rows"
-}
-```
-
-#### Job execution still in progress (heartbeat)
-
-If the job is running longer than expected as defined by the job's `ttl_seconds` configuration, the service must perform a heartbeat callback to extend the execution's TTL. This will extend the execution by `ttl_seconds` seconds. Optionally provide a `progress` indicator (integer, 0-100).
-
-Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
-
-```text
-Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
-
-{
-  "status": "processing",
-  "progress": 73
 }
 ```
 
@@ -262,10 +265,14 @@ You may find it useful to grok some of our other Serverless projects:
 ## TODO
 
 * Test suite
+* Retry/On-demand/Ad-hoc job run endpoint
+  * API endpoint for running an execution now
+  * optionally take a failed execution as input, links the two executions for displaying that relationship in UI
 * Slack app for job failure notifications and job management
 * Per-function IAM roles
   * seems to conflict with step functions plugin
 * stage-specific statemachine names
+* encrypted/signed callback tokens for validating those API calls
 * add jsonschema errors to APIG _response_ when using request validation
   * possible w/ cloudformation but not clear if there is Serverless Framework support
 * ~updateJobSchedule as a step function!~
@@ -289,9 +296,10 @@ You may find it useful to grok some of our other Serverless projects:
   * execution latency (time elapsed from scheduled event time to service invocation)
   * enable/implement tracing for all function states, help inform future optimizations
     * include lambda stats (memory, etc) in metrics, so we can observe the effect on latency
-* Callback heartbeat/keep-alive endpoint to extend the execution's lock_expires_at
+* ~Callback heartbeat/keep-alive endpoint to extend the execution's lock_expires_at~
   * extend the execution's timeout by a duration less than or equal to the job's configured ttl_seconds
   * wait step on the execution needs to retry if the value has been extended
+  * Step Functions doesn't yet support dynamic `TimeoutSeconds` or `HeartbeatSeconds`
 * Internal job to stop pending state machine executions if ttl expired (cleanup job)
 * Abstract into discrete AWS Event Fork Pipelines components
 * ~Update to node10~

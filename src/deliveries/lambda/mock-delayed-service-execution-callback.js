@@ -13,9 +13,19 @@ function makeDeliveryLambdaMockDelayedServiceExecutionCallback({
     logger.addContext('input', input);
     logger.debug('start');
 
-    const { callbackUrl } = input;
+    const {
+      callbackUrl,
+      heartbeatIntervalSeconds,
+      requestTimeMs,
+      ttlSeconds,
+    } = input;
 
-    await mockDelayedServiceExecutionCallback(callbackUrl);
+    await mockDelayedServiceExecutionCallback({
+      callbackUrl,
+      heartbeatIntervalSeconds,
+      requestTimeMs,
+      ttlSeconds,
+    });
 
     return true;
   };

@@ -5,19 +5,16 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
     jobExecutionResult,
     callbackTaskToken,
   ) {
-    const { status } = jobExecutionResult;
+    const { status, progress } = jobExecutionResult;
     let method;
     const params = { taskToken: callbackTaskToken };
+    let outcome = 'success';
 
     switch (status) {
-    // case 'fail':
-    // case 'failure':
-    //   method = 'sendTaskFailure';
-    //   params.cause = summary;
-    //   params.error = error;
-    //   break;
-      case 'processing': // (heartbeat)
+      case 'heartbeat':
+      case 'processing':
         method = 'sendTaskHeartbeat';
+        outcome = 'heartbeat';
         break;
       case 'success':
       default:
@@ -27,6 +24,10 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
 
     await stepfunctions[method](params).promise();
 
-    return true;
+    return {
+      outcome,
+      progress: progress || 0,
+      updatedAt: Date.now(),
+    };
   }
 ;

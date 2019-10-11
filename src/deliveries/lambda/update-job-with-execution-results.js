@@ -14,10 +14,10 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
           key: jobKey,
         },
         jobExecution: {
-          name: jobExecutionName,
           event: {
             time: eventTime,
           },
+          name: jobExecutionName,
           serviceInvokedAt,
         },
       },
@@ -29,17 +29,17 @@ function makeDeliveryLambdaUpdateJobWithExecutionResults({
     logger.addContext('input', inputs);
     logger.debug('start');
 
-    let updatedJob = {};
-
-    if (exclusive && jobExecutionResult.status === 'success') {
-      updatedJob = await updateJobWithExecutionResults(
-        jobKey,
-        jobExecutionName,
-        eventTime,
-        serviceInvokedAt,
-        jobExecutionResult,
-      );
+    if (!exclusive) {
+      return {};
     }
+
+    const updatedJob = await updateJobWithExecutionResults({
+      eventTime,
+      jobExecutionName,
+      jobExecutionResult,
+      jobKey,
+      serviceInvokedAt,
+    });
 
     return updatedJob;
   };

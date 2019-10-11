@@ -16,13 +16,25 @@ function makeDeliveryLambdaMockHttpInvokeTarget({
 
     const {
       body: bodyJson,
+      requestContext: {
+        requestTimeEpoch: requestTimeMs,
+      },
     } = input;
 
     const body = JSON.parse(bodyJson);
 
-    const { callbackUrl } = camelCaseObj(body);
+    const {
+      callbackUrl,
+      heartbeatIntervalSeconds,
+      ttlSeconds,
+    } = camelCaseObj(body);
 
-    await invokeMockDelayedCallback(callbackUrl);
+    await invokeMockDelayedCallback({
+      callbackUrl,
+      heartbeatIntervalSeconds,
+      requestTimeMs,
+      ttlSeconds,
+    });
 
     return {
       statusCode: 204,

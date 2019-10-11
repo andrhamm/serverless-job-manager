@@ -400,6 +400,44 @@ class JobsRepository {
     return dynamodbUnmarshall(updatedJob);
   }
 
+  async extendJobExecutionLock(
+    jobKey,
+    jobExecutionName,
+    seconds,
+    progress,
+  ) {
+    // const jobBefore = await this.getJobByKey(jobKey);
+
+    // this.logger.addContext('jobBefore', jobBefore);
+
+    const params = {
+      TableName: this.tableNameJobs,
+      Key: dynamodbMarshall(jobKey),
+      ExpressionAttributeNames: {
+        '#lockExecution': 'lockExecution',
+        '#lockExpiresAt': 'lockExpiresAt',
+        '#lockExecutionProgress': 'lockExecutionProgress',
+        '#updatedAt': 'updatedAt',
+      },
+      ExpressionAttributeValues: dynamodbMarshall({
+        ':now': parseInt(Date.now() / 1000, 10),
+        ':lockExecution': jobExecutionName,
+        ':progress': parseInt(progress || 0, 10),
+        ':seconds': parseInt(seconds, 10),
+      }),
+      UpdateExpression: 'SET #updatedAt = :now, #lockExpiresAt = :seconds + #lockExpiresAt, #lockExecutionProgress = :progress',
+      ConditionExpression: 'attribute_exists(#lockExecution) AND #lockExecution = :lockExecution AND attribute_exists(#lockExpiresAt) AND #lockExpiresAt >= :now',
+      ReturnValues: 'UPDATED_NEW',
+    };
+
+    this.logger.addContext('updateItemParams', params);
+    this.logger.debug('updateItem');
+
+    const { Attributes: updatedJob } = await this.dynamodb.updateItem(params).promise();
+
+    return dynamodbUnmarshall(updatedJob);
+  }
+
   async updateJobExecutionWithExecutionResults(
     jobExecutionKey,
     serviceInvokedAt,

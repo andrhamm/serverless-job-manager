@@ -17,9 +17,15 @@ function makeDeliveryLambdaUpdateAwaitCallbackActivityStatus({
       jobExecutionResult,
     } = input;
 
-    await updateAwaitCallbackActivityStatus(jobExecutionResult, callbackTaskToken);
+    const callbackResult = await updateAwaitCallbackActivityStatus(
+      jobExecutionResult,
+      callbackTaskToken,
+    );
 
-    return {};
+    return {
+      ...input,
+      callbackResult,
+    };
   };
 }
 

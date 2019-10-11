@@ -23,6 +23,7 @@ provider:
     # DYNAMODB_INDEX_NAME_JOBS_SCHEDULE: ${self:custom.dynamodb_index_name_jobs_schedule}
     DYNAMODB_TABLE_NAME_JOB_EXECUTIONS: ${self:custom.dynamodb_table_name_job_executions}
     DYNAMODB_PARTITION_COUNT_JOB_EXECUTIONS: 8
+    CALLBACK_HEARTBEAT_INTERVAL_SECONDS: ${self:custom.callback_heartbeat_interval_seconds}
     # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
     #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
     API_BASE:
@@ -121,13 +122,14 @@ custom:
   dynamodb_index_name_jobs_guid: ${self:service.name}-${self:provider.stage}-jobs-guid
   # dynamodb_index_name_jobs_schedule: ${self:service.name}-${self:provider.stage}-jobs-schedule
   iam_role_name_cloudwatch_events: ${self:service.name}-${self:provider.stage}-cloudwatchevents
+  callback_heartbeat_interval_seconds: 60
 
 functions:
   # Step function task handlers
   mockDelayedServiceExecutionCallback:
     handler: src/deliveries/lambda/mock-delayed-service-execution-callback.delivery
-    description: Posts to the callback endpoint after a random delay up to 3 seconds
-    timeout: 10
+    description: Simulates service callbacks including heartbeat calls
+    timeout: 900
   getJobKeyByGuid:
     handler: src/deliveries/lambda/get-job-key-by-guid.delivery
   getJobLock:
@@ -163,6 +165,8 @@ functions:
         Fn::GetAtt: [ IamRoleCloudWatchEvents, Arn ]
   updateJobInsertJob:
     handler: src/deliveries/lambda/update-job-insert-job.delivery
+  extendJobLock:
+    handler: src/deliveries/lambda/extend-job-lock.delivery
 
   # API handlers
   searchJobsByService:
@@ -354,7 +358,9 @@ stepFunctions:
                   SaveCallbackTaskToken:
                     Type: Task
                     Resource: arn:aws:states:::lambda:invoke.waitForTaskToken
-                    HeartbeatSeconds: 60
+                    # Add it to the #AWSWishList .....
+                    # TimeoutSeconds.$: $.jobStatic.ttlSeconds 
+                    HeartbeatSeconds: ${self:custom.callback_heartbeat_interval_seconds}
                     Parameters:
                       FunctionName: ${self:custom.arn_prefix_lambda_function}-saveCallbackTaskToken
                       Payload:
@@ -417,6 +423,20 @@ stepFunctions:
           UpdateAwaitCallbackActivityStatus:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-updateAwaitCallbackActivityStatus
+            Next: ExtendJobLockIfExclusive
+          ExtendJobLockIfExclusive:
+            Type: Choice
+            Choices:
+              - Variable: "$.callbackResult.outcome"
+                StringEquals: "heartbeat"
+                Next: ExtendJobLock
+            Default: EndCallback
+          ExtendJobLock:
+            Type: Task
+            Resource: ${self:custom.arn_prefix_lambda_function}-extendJobLock
+            End: true
+          EndCallback:
+            Type: Pass
             End: true
 
 resources:

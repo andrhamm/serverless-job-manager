@@ -1,12 +1,12 @@
 export const makeUpdateJobWithExecutionResults = ({
   jobsRepository,
-}) => function updateJobWithExecutionResults(
-  jobKey,
-  jobExecutionName,
+}) => function updateJobWithExecutionResults({
   eventTime,
-  serviceInvokedAt,
+  jobExecutionName,
   jobExecutionResult,
-) {
+  jobKey,
+  serviceInvokedAt,
+}) {
   return jobsRepository.updateJobWithExecutionResults(
     jobKey,
     jobExecutionName,
