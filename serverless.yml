@@ -17,6 +17,7 @@ provider:
     STACK_NAME: ${self:service.name}-${self:provider.stage}
     STATE_MACHINE_ARN_EXECUTE_JOB: ${self:resources.Outputs.ExecuteJobExecutionStateMachineARN.Value}
     STATE_MACHINE_ARN_UPDATE_JOB: ${self:resources.Outputs.UpdateJobStateMachineARN.Value}
+    STATE_MACHINE_ARN_EXECUTION_CALLBACK: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
     CLOUDWATCH_EVENTS_RULE_PREFIX: sjm.
     DYNAMODB_TABLE_NAME_JOBS: ${self:custom.dynamodb_table_name_jobs}
     DYNAMODB_INDEX_NAME_JOBS_GUID: ${self:custom.dynamodb_index_name_jobs_guid}
@@ -45,6 +46,7 @@ provider:
         - states:DescribeExecution
       Resource:
         - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:updateJob:*
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:executionCallback:*
     - Effect: Allow
       Action:
         - states:SendTask*
@@ -251,11 +253,15 @@ functions:
           path: services/{serviceName}/jobs/{jobName}
           method: delete
           authorizer: aws_iam
-  serviceExecutionCallback:
-    handler: src/deliveries/lambda/service-execution-callback.delivery
-    description: Endpoint for services to call with job results, starts and execution of the ExecutionCallback state machine
+  # serviceExecutionCallback:
+  #   description: Validates callback input
+  #   handler: src/deliveries/lambda/service-execution-callback.delivery
+  postCallback:
+    handler: src/deliveries/lambda/await-state-machine-execution.delivery
+    # handler: src/deliveries/lambda/service-execution-callback.delivery
+    description: Endpoint for services to call with job results, syncronous execution of the ExecutionCallback state machine
     environment:
-      STATE_MACHINE_ARN_EXECUTION_CALLBACK: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
+      STATE_MACHINE_ARN: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
     events:
       - http:
           path: callback/{jobGuid}/{encodedJobExecutionKey}
@@ -366,6 +372,8 @@ stepFunctions:
                       Payload:
                         jobExecutionKey.$: $.jobExecution.key
                         callbackTaskToken.$: $$.Task.Token
+                    ResultPath: $.result.jobExecutionResult
+                    OutputPath: $.result
                     End: true
               - StartAt: InvokeServiceExecution
                 States:
@@ -420,9 +428,17 @@ stepFunctions:
                     Type: Task
                     Resource: ${self:custom.arn_prefix_lambda_function}-getJobExecutionByExecutionKey
                     End: true
+            Catch:
+              - ErrorEquals: ["States.ALL"]
+                ResultPath: $
+                Next: EndCallback
           UpdateAwaitCallbackActivityStatus:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-updateAwaitCallbackActivityStatus
+            Catch:
+              - ErrorEquals: ["States.ALL"]
+                ResultPath: $
+                Next: EndCallback
             Next: ExtendJobLockIfExclusive
           ExtendJobLockIfExclusive:
             Type: Choice
@@ -434,7 +450,11 @@ stepFunctions:
           ExtendJobLock:
             Type: Task
             Resource: ${self:custom.arn_prefix_lambda_function}-extendJobLock
-            End: true
+            Catch:
+              - ErrorEquals: ["States.ALL"]
+                ResultPath: $
+                Next: EndCallback
+            Next: EndCallback
           EndCallback:
             Type: Pass
             End: true

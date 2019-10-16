@@ -157,11 +157,18 @@ class JobsRepository {
   }
 
   async lockJobByKey(jobKey, jobExecutionName) {
+    if (this.logger.isDebugEnabled()) {
+      const jobBefore = await this.getJobByKey(jobKey);
+
+      this.logger.addContext('jobBefore', jobBefore);
+    }
+
     const params = {
       TableName: this.tableNameJobs,
       Key: dynamodbMarshall(jobKey),
       ExpressionAttributeNames: {
         '#lockExecution': 'lockExecution',
+        '#lockExecutionProgress': 'lockExecutionProgress',
         '#lockExpiresAt': 'lockExpiresAt',
         '#ttlSeconds': 'ttlSeconds',
       },
@@ -170,8 +177,9 @@ class JobsRepository {
         ':lockExecution': jobExecutionName,
         ':nulltype': 'NULL',
         ':numtype': 'N',
+        ':zero': 0,
       }),
-      UpdateExpression: 'SET #lockExpiresAt = :now + #ttlSeconds, #lockExecution = :lockExecution',
+      UpdateExpression: 'SET #lockExpiresAt = :now + #ttlSeconds, #lockExecution = :lockExecution, #lockExecutionProgress = :zero',
       ConditionExpression:
         'attribute_not_exists(#lockExpiresAt) OR ' +
         'attribute_type(#lockExpiresAt, :nulltype) OR ' +
@@ -179,7 +187,8 @@ class JobsRepository {
       ReturnValues: 'ALL_NEW',
     };
 
-    this.logger.debug(`updateItem params: ${JSON.stringify(params)}`);
+    this.logger.addContext('updateItemParams', params);
+    this.logger.debug('calling updateItem');
 
     // does a consistent write to get a lock on the job
     const {
@@ -256,7 +265,7 @@ class JobsRepository {
   }
 
   async updateJobExecutionCallbackTaskToken(jobExecutionKey, callbackTaskToken) {
-    const { Attributes: updated } = await this.dynamodb.updateItem({
+    const params = {
       TableName: this.tableNameJobExecutions,
       Key: dynamodbMarshall(jobExecutionKey),
       ExpressionAttributeNames: {
@@ -269,9 +278,15 @@ class JobsRepository {
       }),
       UpdateExpression: 'SET #updatedAt = :now, #callbackTaskToken = :callbackTaskToken',
       ReturnValues: 'UPDATED_NEW',
-    }).promise();
+    };
 
-    this.logger.debug(`updatedJobExecution: ${JSON.stringify(updated)}`);
+    this.logger.addContext('updateJobExecutionCallbackTaskToken.updateItemParams', params);
+    this.logger.debug('updateJobExecutionCallbackTaskToken calling updateItem');
+
+    const { Attributes: updated } = await this.dynamodb.updateItem(params).promise();
+
+    this.logger.addContext('updatedJobExecutionFields', dynamodbUnmarshall(updated));
+    this.logger.debug('updateJobExecutionCallbackTaskToken.updateItem complete');
 
     return true;
   }
@@ -393,7 +408,8 @@ class JobsRepository {
       ReturnValues: 'UPDATED_NEW',
     };
 
-    this.logger.debug(`updateItem params: ${JSON.stringify(params)}`);
+    this.logger.addContext('updateJobWithExecutionResults.updateItemParams', params);
+    this.logger.debug('updateJobWithExecutionResults calling updateItem');
 
     const { Attributes: updatedJob } = await this.dynamodb.updateItem(params).promise();
 
@@ -406,9 +422,11 @@ class JobsRepository {
     seconds,
     progress,
   ) {
-    // const jobBefore = await this.getJobByKey(jobKey);
+    if (this.logger.isDebugEnabled()) {
+      const jobBefore = await this.getJobByKey(jobKey);
 
-    // this.logger.addContext('jobBefore', jobBefore);
+      this.logger.addContext('jobBefore', jobBefore);
+    }
 
     const params = {
       TableName: this.tableNameJobs,
@@ -424,14 +442,16 @@ class JobsRepository {
         ':lockExecution': jobExecutionName,
         ':progress': parseInt(progress || 0, 10),
         ':seconds': parseInt(seconds, 10),
+        ':stringtype': 'S',
+        ':numtype': 'N',
       }),
       UpdateExpression: 'SET #updatedAt = :now, #lockExpiresAt = :seconds + #lockExpiresAt, #lockExecutionProgress = :progress',
-      ConditionExpression: 'attribute_exists(#lockExecution) AND #lockExecution = :lockExecution AND attribute_exists(#lockExpiresAt) AND #lockExpiresAt >= :now',
+      ConditionExpression: 'attribute_exists(#lockExecution) AND attribute_type(#lockExecution, :stringtype) AND #lockExecution = :lockExecution AND attribute_exists(#lockExpiresAt) AND attribute_type(#lockExpiresAt, :numtype) AND #lockExpiresAt >= :now',
       ReturnValues: 'UPDATED_NEW',
     };
 
-    this.logger.addContext('updateItemParams', params);
-    this.logger.debug('updateItem');
+    this.logger.addContext('extendJobExecutionLock.updateItemParams', params);
+    this.logger.debug('extendJobExecutionLock calling updateItem');
 
     const { Attributes: updatedJob } = await this.dynamodb.updateItem(params).promise();
 

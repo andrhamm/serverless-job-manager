@@ -3,8 +3,9 @@ import { requireJson } from '../../lib/common';
 
 import { decodeEncodedJobExecutionKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
 
+// DEPRECATED!
 function makeDeliveryLambdaServiceExecutionCallback({
-  serviceExecutionCallback,
+  // serviceExecutionCallback,
   getLogger,
 }) {
   return async function delivery(input) {
@@ -24,6 +25,9 @@ function makeDeliveryLambdaServiceExecutionCallback({
         jobGuid,
         encodedJobExecutionKey,
       },
+      requestContext: {
+        requestTimeEpoch,
+      },
       body: jobExecutionResultJson,
     } = input;
 
@@ -31,22 +35,30 @@ function makeDeliveryLambdaServiceExecutionCallback({
     const jobExecutionKey = decodeEncodedJobExecutionKey(
       decodeURIComponent(encodedJobExecutionKey),
     );
-    const jobExecutionResult = jobExecutionResultJson ? JSON.parse(jobExecutionResultJson) : {};
+    const jobExecutionResult = JSON.parse(jobExecutionResultJson);
     const filteredJobExecutionResult = filterJobExecutionResult(jobExecutionResult);
 
-    const { serviceCallbackExecutionArn } = await serviceExecutionCallback(
-      jobGuid,
-      jobExecutionKey,
-      filteredJobExecutionResult,
-    );
-
-    logger.addContext('serviceCallbackExecutionArn', serviceCallbackExecutionArn);
-    logger.debug('end');
-
     return {
-      statusCode: 204,
-      body: '',
+      filteredJobExecutionResult,
+      jobExecutionKey,
+      jobGuid,
+      requestTimeEpoch,
     };
+
+    // const { serviceCallbackExecutionArn } = await serviceExecutionCallback(
+    //   jobGuid,
+    //   jobExecutionKey,
+    //   filteredJobExecutionResult,
+    //   requestTimeEpoch,
+    // );
+
+    // logger.addContext('serviceCallbackExecutionArn', serviceCallbackExecutionArn);
+    // logger.debug('end');
+
+    // return {
+    //   statusCode: 204,
+    //   body: '',
+    // };
   };
 }
 

@@ -1,10 +1,11 @@
 import { stepfunctions } from '../lib/aws_clients';
 
-export const makeUpdateAwaitCallbackActivityStatus = () =>
+export const makeUpdateAwaitCallbackActivityStatus = ({ getLogger }) =>
   async function updateAwaitCallbackActivityStatus(
     jobExecutionResult,
     callbackTaskToken,
   ) {
+    const logger = getLogger();
     const { status, progress } = jobExecutionResult;
     let method;
     const params = { taskToken: callbackTaskToken };
@@ -22,7 +23,12 @@ export const makeUpdateAwaitCallbackActivityStatus = () =>
         params.output = JSON.stringify(jobExecutionResult);
     }
 
-    await stepfunctions[method](params).promise();
+    logger.addContext(`${method}Params`, params);
+    logger.debug(`calling ${method}`);
+
+    const res = await stepfunctions[method](params).promise();
+
+    logger.debug(`${method} result: ${JSON.stringify(res)}`);
 
     return {
       outcome,

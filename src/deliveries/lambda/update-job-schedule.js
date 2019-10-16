@@ -16,7 +16,6 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
       return notJson;
     }
 
-    // TODO: validate w/ jsonschema!
     const {
       pathParameters: {
         serviceName,
@@ -24,6 +23,16 @@ function makeDeliveryLambdaUpdateJobSchedule({ updateJobSchedule, getLogger }) {
       },
       body: bodyJson,
     } = input;
+
+    // service and job name must not cause issues downstream
+    // TODO: maybe just move these args into the req body...
+    if (!`${serviceName}${jobName}`.match(/^[a-z0-9-]+$/)) {
+      return {
+        statusCode: 400,
+        headers: { 'Content-Type': 'application/json' },
+        body: '{"message":"Invalid service or job name. Must match \\"[a-z0-9-]+\\""}',
+      };
+    }
 
     const body = JSON.parse(bodyJson);
 

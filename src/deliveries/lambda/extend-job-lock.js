@@ -1,4 +1,5 @@
 import configureContainer from '../../container';
+import { snakeCaseObj } from '../../lib/common';
 
 function makeDeliveryLambdaExtendJobLock({
   extendJobLockByJobKey,
@@ -21,13 +22,19 @@ function makeDeliveryLambdaExtendJobLock({
       },
     } = input;
 
-    await extendJobLockByJobKey({
+    const updatedJob = await extendJobLockByJobKey({
       jobExecutionName,
       jobKey,
       progress,
     });
 
-    return {};
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(snakeCaseObj(updatedJob)),
+    };
   };
 }
 

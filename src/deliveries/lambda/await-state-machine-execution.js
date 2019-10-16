@@ -1,125 +1,156 @@
-import { snakeCaseObj } from '../../lib/common';
+import { requireJson, snakeCaseObj } from '../../lib/common';
 import configureContainer from '../../container';
+import { parseSortKey, decodeEncodedJobExecutionKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
 
 function makeDeliveryLambdaAwaitStateMachineExecution({
   awaitStateMachineExecution,
+  stateMachineArnExecutionCallback,
   stateMachineArn,
   getLogger,
 }) {
   // As gross as this is, AWS will soon release the ability to execute
   // a Step Function synchronously and this will no longer be necessary
-  return async function delivery(input, context, callback) {
+  return async function delivery(input) {
     const logger = getLogger();
     // logger.addContext('guid', guid);
     logger.addContext('input', input);
     logger.debug('start');
 
-    let {
-      stateMachineArn: givenStateMachineArn,
-      executionInput,
-      executionName,
-    } = input;
-
-    const targetStateMachineArn = givenStateMachineArn || stateMachineArn;
-
-    if (!executionInput) {
-      executionInput = input || {};
+    // API Gateway doesn't let you require a specific content-type, so if
+    // it is not json, the jsonschema validation will not have been applied
+    const notJson = requireJson(input.headers);
+    if (notJson) {
+      return notJson;
     }
 
-    if (!executionName && input.requestContext) {
-      executionName = input.requestContext.requestId;
+    const {
+      requestContext: {
+        requestTimeEpoch,
+      },
+      body: bodyJson,
+    } = input;
+
+    let executionName = input.requestContext.requestId;
+    let executionInput;
+
+    // for certain statemachines we want to customize the execution name
+    if (stateMachineArn === stateMachineArnExecutionCallback) {
+      const {
+        pathParameters: {
+          jobGuid,
+          encodedJobExecutionKey,
+        },
+      } = input;
+      const jobExecutionKey = decodeEncodedJobExecutionKey(
+        decodeURIComponent(encodedJobExecutionKey),
+      );
+      const { sortKey } = jobExecutionKey;
+      const {
+        eventId,
+        jobName,
+        serviceName,
+      } = parseSortKey(sortKey);
+      const jobExecutionResultUnfiltered = JSON.parse(bodyJson);
+      const jobExecutionResult = filterJobExecutionResult(jobExecutionResultUnfiltered);
+      const { status } = jobExecutionResult;
+
+      // attempt to make an execution name that is somewhat human readable
+      // on the AWS Step Functions console
+      executionName = `${serviceName.slice(0, 18)}.${jobName.slice(0, 18)}--${eventId.slice(-12)}-${requestTimeEpoch}-${status.slice(0, 1)}`;
+      executionInput = {
+        jobGuid,
+        jobExecutionKey,
+        jobExecutionResult,
+        callbackTimeMs: requestTimeEpoch,
+      };
+    } else {
+      executionInput = input;
     }
 
     const execution = await awaitStateMachineExecution({
-      stateMachineArn: targetStateMachineArn,
+      stateMachineArn,
       executionInput,
       executionName,
     });
 
-    logger.debug(`awaitStateMachineExecution result: ${JSON.stringify(execution)}`);
+    let statusCode;
+    let body;
+    let headers;
+    let headersOverride;
+    let errorMessage;
+    let errorType;
+    let trace;
 
-    if (input.requestContext && input.requestContext.apiId) {
-      let statusCode;
-      let body;
-      let headers;
-      let headersOverride;
-      let errorMessage;
-      let errorType;
-      let trace;
+    if (execution.status === 'SUCCEEDED') {
+      statusCode = 200;
+      const result = JSON.parse(execution.output);
+      logger.addContext('stateMachineOutput', result);
 
-      if (execution.status === 'SUCCEEDED') {
-        statusCode = 200;
-        const result = JSON.parse(execution.output);
+      // TODO: this is a hot mess and doesn't work...
+      // if Lambda.ResourceNotFoundException happens, should be 500 not 200
+      if (result.Error) {
+        let { Error: code, Cause: causeJson } = result;
+        if (causeJson) {
+          try {
+            const cause = JSON.parse(causeJson);
 
-        // TODO: this is a hot mess and doesn't work...
-        // if Lambda.ResourceNotFoundException happens, should be 500 not 200
-        if (result.Error) {
-          logger.debug(`execution.output: ${JSON.stringify(result)}`);
+            logger.addContext('stateMachineOutputErrorCause', cause);
 
-          let { Error: code, Cause: causeJson } = result;
-          if (causeJson) {
-            try {
-              // console.log(`causeJson: ${causeJson}`);
-              const cause = JSON.parse(causeJson);
+            ({ errorMessage, errorType, trace } = cause);
 
-              ({ errorMessage, errorType, trace } = cause);
+            errorMessage = errorMessage.split('\n')[0];
 
-              errorMessage = errorMessage.split('\n')[0];
-
-              // console.log(`trace: ${JSON.stringify(trace)}`);
-
-              ({ statusCode, headers: headersOverride, code } = JSON.parse(trace.find(l => l.startsWith('Extra: ')).slice(7)));
-            } catch (e) {
-              // blah
-              logger.error(`Failed to parse Extra from stack trace: ${e.message}`);
-            }
-          } else {
-            statusCode = code.includes('BadRequest') ? 400 : 500;
-          }
-
-          body = {
-            message: errorMessage || errorType || code,
-            code,
-          };
-        } else if (result.statusCode) {
-          // console.log('result.statusCode');
-          ({ statusCode, body, headers } = result);
-
-          if (!body) {
-            body = result;
-            delete body.headers;
-            delete body.statusCode;
+            ({ statusCode, headers: headersOverride, code } = JSON.parse(trace.find(l => l.startsWith('Extra: ')).slice(7)));
+          } catch (e) {
+            // blah
+            logger.debug(`Failed to parse Extra from stack trace: ${e.message}`);
           }
         } else {
-          // console.log('else body = result');
-          body = result;
+          statusCode = code.includes('BadRequest') ? 400 : 500;
         }
 
-        body = snakeCaseObj(body);
-      } else {
-        statusCode = 500;
         body = {
-          message: 'Internal Server Error',
-          code: `EXECUTION_${execution.status}`,
+          message: errorMessage || errorType || code,
+          code,
         };
+      } else if (result.statusCode) {
+        ({ statusCode, body, headers } = result);
+
+        if (!body) {
+          body = result;
+          delete body.headers;
+          delete body.statusCode;
+        }
+      } else {
+        body = result;
       }
 
-      const resp = {
-        statusCode,
-        headers: headers || ({
-          'Content-Type': 'application/json',
-          ...headersOverride,
-        }),
-        body: JSON.stringify(body, null, 2),
-      };
-
-      logger.debug(`resp: ${JSON.stringify(resp, null, 2)}`);
-
-      callback(null, resp);
+      body = snakeCaseObj(body);
     } else {
-      logger.debug('requestContext and requestContext.apiId not found, normal callback');
-      callback(null, execution);
+      statusCode = 500;
+      body = {
+        message: 'Internal Server Error',
+        code: `EXECUTION_${execution.status}`,
+      };
     }
+
+    logger.addContext('awaitStateMachineExecutionResult', execution);
+    logger.debug('state machine execution complete');
+
+    const resp = {
+      statusCode,
+      headers: headers || ({
+        'Content-Type': 'application/json',
+        ...headersOverride,
+      }),
+      body: JSON.stringify(body, null, 2),
+    };
+
+    logger.addContext('response', resp);
+    logger.addContext('responseBody', body);
+    logger.debug('end');
+
+    return resp;
   };
 }
 
