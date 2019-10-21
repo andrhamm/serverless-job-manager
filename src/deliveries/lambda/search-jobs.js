@@ -21,19 +21,18 @@ function makeDeliveryLambdaSearchJobs({
     logger.debug('start');
 
     const {
-      body: bodyParams,
+      body,
       multiValueQueryStringParameters,
     } = input;
 
-    ['jobGuid', 'serviceName', 'jobName'].forEach((k) => {
-      if (bodyParams[k]) {
-        if (!Array.isArray(bodyParams[k])) {
-          bodyParams[k] = [bodyParams[k]];
+    const bodyParams = {};
+    if (body) {
+      ['jobGuid', 'serviceName', 'jobName'].forEach((k) => {
+        if (body[k]) {
+          bodyParams[k] = Array.isArray(body[k]) ? body[k] : [body[k]];
         }
-      } else {
-        bodyParams[k] = [];
-      }
-    });
+      });
+    }
 
     const queryParams = camelCaseObj(multiValueQueryStringParameters || {});
 

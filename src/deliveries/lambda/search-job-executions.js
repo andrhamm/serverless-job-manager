@@ -20,11 +20,13 @@ function makeDeliveryLambdaSearchJobExecutions({
     logger.debug('start');
 
     const {
-      body: bodyParams,
+      body,
       queryStringParameters,
     } = input;
 
     const queryParams = camelCaseObj(queryStringParameters || {});
+
+    const bodyParams = body || {};
 
     const params = {
       ...queryParams,
