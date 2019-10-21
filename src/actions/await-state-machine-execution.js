@@ -33,5 +33,8 @@ export const makeAwaitStateMachineExecution = ({
   } while (execution.status === 'RUNNING');
   /* eslint-enable no-await-in-loop */
 
+  logger.addContext('awaitStateMachineExecutionResult', execution);
+  logger.debug('state machine execution complete');
+
   return execution;
 };

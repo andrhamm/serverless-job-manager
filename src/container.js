@@ -19,7 +19,6 @@ import { makeMockDelayedServiceExecutionCallback } from './actions/mock-delayed-
 import { makeSearchJobExecutions } from './actions/search-job-executions';
 import { makeSearchJobs } from './actions/search-jobs';
 import { makeSearchJobsByService } from './actions/search-jobs-by-service';
-import { makeServiceExecutionCallback } from './actions/service-execution-callback';
 import { makeSoftDeleteJob } from './actions/soft-delete-job';
 import { makeUpdateAwaitCallbackActivityStatus } from './actions/update-await-callback-activity-status';
 import { makeUpdateJobExecutionCallbackTaskToken } from './actions/update-job-execution-callback-task-token';
@@ -64,6 +63,7 @@ export default function configureContainer() {
     stateMachineArn: asFunction(() => requireEnvVar('STATE_MACHINE_ARN')),
     stateMachineArnExecuteJob: asFunction(() => requireEnvVar('STATE_MACHINE_ARN_EXECUTE_JOB')),
     stateMachineArnExecutionCallback: asFunction(() => requireEnvVar('STATE_MACHINE_ARN_EXECUTION_CALLBACK')),
+    stateMachineArnUpdateJob: asFunction(() => requireEnvVar('STATE_MACHINE_ARN_UPDATE_JOB')),
     tableNameJobExecutions: asFunction(() => requireEnvVar('DYNAMODB_TABLE_NAME_JOB_EXECUTIONS')),
     tableNameJobs: asFunction(() => requireEnvVar('DYNAMODB_TABLE_NAME_JOBS')),
   });
@@ -90,7 +90,6 @@ export default function configureContainer() {
     searchJobExecutions: asFunction(makeSearchJobExecutions),
     searchJobs: asFunction(makeSearchJobs),
     searchJobsByService: asFunction(makeSearchJobsByService),
-    serviceExecutionCallback: asFunction(makeServiceExecutionCallback),
     softDeleteJob: asFunction(makeSoftDeleteJob),
     updateAwaitCallbackActivityStatus: asFunction(makeUpdateAwaitCallbackActivityStatus),
     updateJobExecutionCallbackTaskToken: asFunction(makeUpdateJobExecutionCallbackTaskToken),

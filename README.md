@@ -269,6 +269,8 @@ You may find it useful to grok some of our other Serverless projects:
   * API endpoint for running an execution now
   * optionally take a failed execution as input, links the two executions for displaying that relationship in UI
 * Slack app for job failure notifications and job management
+* improve search endpoint results
+  * determine useful fields, don't leak dynamodb sort key etc (not useful to client)
 * Per-function IAM roles
   * seems to conflict with step functions plugin
 * stage-specific statemachine names

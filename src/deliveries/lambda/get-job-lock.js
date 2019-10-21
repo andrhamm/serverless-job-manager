@@ -33,7 +33,7 @@ function makeDeliveryLambdaGetJobLock({
     logger.addContext('output', output);
     logger.debug('end');
 
-    return JSON.parse(JSON.stringify(output));
+    return output;
   };
 }
 

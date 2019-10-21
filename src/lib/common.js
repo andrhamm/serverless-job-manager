@@ -1,13 +1,25 @@
 import camelCase from 'lodash.camelcase';
-import mapKeys from 'lodash.mapkeys';
 import snakeCase from 'lodash.snakecase';
+import isPlainObject from 'lodash.isplainobject';
 
-function camelCaseObj(object) {
-  return mapKeys(object, (v, k) => camelCase(k));
+function deepChangeKeyCase(value, fn) {
+  if (Array.isArray(value)) {
+    return value.map(v => deepChangeKeyCase(v, fn));
+  } else if (isPlainObject(value)) {
+    return Object.entries(value).reduce((acc, [k, v]) => {
+      acc[fn(k)] = deepChangeKeyCase(v, fn);
+      return acc;
+    }, {});
+  }
+  return value;
 }
 
-function snakeCaseObj(object) {
-  return mapKeys(object, (v, k) => snakeCase(k));
+function camelCaseObj(value) {
+  return deepChangeKeyCase(value, camelCase);
+}
+
+function snakeCaseObj(value) {
+  return deepChangeKeyCase(value, snakeCase);
 }
 
 function filterProps(props, removeProps) {
@@ -61,7 +73,6 @@ export {
   chunkArray,
   delay,
   filterProps,
-  mapKeys,
   requireJson,
   snakeCase,
   snakeCaseObj,

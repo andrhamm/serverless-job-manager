@@ -1,25 +1,33 @@
+import middy from 'middy';
+import {
+  httpEventNormalizer,
+  httpErrorHandler,
+  httpHeaderNormalizer,
+} from 'middy/middlewares';
+import jsonBodiesMiddleware from '../../middlewares/json-bodies';
 import configureContainer from '../../container';
-import { camelCaseObj, snakeCaseObj } from '../../lib/common';
 
 function makeDeliveryLambdaSearchJobsByService({ searchJobsByService, getLogger }) {
-  return async function delivery(input) {
-    const logger = getLogger();
+  let logger = getLogger();
+
+  return middy(async (input) => {
+    logger = getLogger();
     logger.addContext('input', input);
     logger.debug('start');
 
     const {
-      pathParameters,
+      pathParameters: {
+        serviceName,
+      },
     } = input;
 
-    const pathParams = camelCaseObj(pathParameters || {});
+    const results = await searchJobsByService(serviceName);
 
-    const results = await searchJobsByService(pathParams.serviceName);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ results: results.map(snakeCaseObj) }, null, 2),
-    };
-  };
+    return results;
+  }).use(httpHeaderNormalizer())
+    .use(httpEventNormalizer())
+    .use(jsonBodiesMiddleware({ requireJson: true, logger }))
+    .use(httpErrorHandler());
 }
 
 export const delivery = configureContainer().build(makeDeliveryLambdaSearchJobsByService);

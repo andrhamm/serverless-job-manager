@@ -253,9 +253,6 @@ functions:
           path: services/{serviceName}/jobs/{jobName}
           method: delete
           authorizer: aws_iam
-  # serviceExecutionCallback:
-  #   description: Validates callback input
-  #   handler: src/deliveries/lambda/service-execution-callback.delivery
   postCallback:
     handler: src/deliveries/lambda/await-state-machine-execution.delivery
     # handler: src/deliveries/lambda/service-execution-callback.delivery

@@ -1,29 +1,28 @@
+import middy from 'middy';
+import {
+  httpEventNormalizer,
+  httpErrorHandler,
+  httpHeaderNormalizer,
+} from 'middy/middlewares';
+import jsonBodiesMiddleware from '../../middlewares/json-bodies';
 import configureContainer from '../../container';
-import { camelCaseObj, snakeCaseObj, requireJson } from '../../lib/common';
+import { camelCaseObj } from '../../lib/common';
 
-function makeDeliveryLambdaSearchJobExecutions({ searchJobExecutions, getLogger }) {
-  return async function delivery(input) {
-    const logger = getLogger();
+function makeDeliveryLambdaSearchJobExecutions({
+  searchJobExecutions,
+  getLogger,
+}) {
+  let logger = getLogger();
+
+  return middy(async (input) => {
+    logger = getLogger();
     logger.addContext('input', input);
     logger.debug('start');
 
     const {
-      body: bodyJson,
-      httpMethod,
+      body: bodyParams,
       queryStringParameters,
     } = input;
-
-    // API Gateway doesn't let you require a specific content-type, so if
-    // it is not json, the jsonschema validation will not have been applied
-    let bodyParams = {};
-    if (httpMethod !== 'GET' && bodyJson) {
-      const notJson = requireJson(input.headers);
-      if (notJson) {
-        return notJson;
-      }
-
-      bodyParams = camelCaseObj(JSON.parse(bodyJson));
-    }
 
     const queryParams = camelCaseObj(queryStringParameters || {});
 
@@ -50,26 +49,18 @@ function makeDeliveryLambdaSearchJobExecutions({ searchJobExecutions, getLogger 
       since,
     });
 
-    const response = {
+    return {
       count: results.length,
       since: sinceMs,
       paging: {
         more: newMoreToken,
       },
-      // TODO: filter response
-      results: results.map((result) => {
-        const parsedExecution = snakeCaseObj(result);
-        parsedExecution.event = snakeCaseObj(result.event);
-        parsedExecution.result = snakeCaseObj(result.result);
-        return parsedExecution;
-      }),
+      results,
     };
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(response, null, 2),
-    };
-  };
+  }).use(httpHeaderNormalizer())
+    .use(httpEventNormalizer())
+    .use(jsonBodiesMiddleware({ requireJson: true, logger }))
+    .use(httpErrorHandler());
 }
 
 export const delivery = configureContainer().build(makeDeliveryLambdaSearchJobExecutions);
