@@ -51,7 +51,7 @@ const jsonBodiesMiddleware = ({ requireJson = true, logger }) =>
       if (requestHeaders) {
         const acceptType = requestHeaders.Accept || requestHeaders.accept;
         const { type } = contentTypeLib.parse(acceptType);
-        if (type === 'application/json') {
+        if (type === 'application/json' && body !== '') {
           headers = handler.response.headers || {};
           headers['Content-Type'] = 'application/json';
           body = JSON.stringify(body);

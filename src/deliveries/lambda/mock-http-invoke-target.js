@@ -6,7 +6,6 @@ import {
 } from 'middy/middlewares';
 import jsonBodiesMiddleware from '../../middlewares/json-bodies';
 import configureContainer from '../../container';
-import { camelCaseObj } from '../../lib/common';
 
 const container = configureContainer();
 
@@ -33,7 +32,7 @@ function makeDeliveryLambdaMockHttpInvokeTarget({
       callbackUrl,
       heartbeatIntervalSeconds,
       ttlSeconds,
-    } = camelCaseObj(body);
+    } = body;
 
     await invokeMockDelayedCallback({
       callbackUrl,

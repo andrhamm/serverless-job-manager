@@ -5,6 +5,7 @@ export const makeMockDelayedServiceExecutionCallback = ({
   callbackHeartbeatIntervalSeconds,
   getHttpClient,
   getLogger,
+  vpceId,
 }) => async function mockDelayedServiceExecutionCallback({
   callbackUrl,
   heartbeatIntervalSeconds: heartbeatIntervalSecondsIn, // 60
@@ -14,7 +15,10 @@ export const makeMockDelayedServiceExecutionCallback = ({
   const http = getHttpClient();
   const logger = getLogger();
 
-  const doHeartbeat = progress => http(callbackUrl, {
+  // temporarily try both non-VPCE callback and VPCE callback
+  const nonVpceCallbackUrl = callbackUrl.split(`-${vpceId}`).join('');
+
+  const doSingleHeartbeat = (progress, url) => http(url || callbackUrl, {
     method: 'post',
     body: JSON.stringify({
       status: 'processing',
@@ -24,6 +28,21 @@ export const makeMockDelayedServiceExecutionCallback = ({
       'Content-Type': 'application/json',
     },
   });
+
+  const doHeartbeat = async (progress) => {
+    const [result, vpceResult] = await Promise.all([
+      doSingleHeartbeat(progress, nonVpceCallbackUrl),
+      doSingleHeartbeat(progress),
+    ]);
+
+    const { status, statusText } = result;
+    const { vpceStatus, vpceStatusText } = vpceResult;
+
+    logger.debug(`${nonVpceCallbackUrl} -> ${status} ${statusText}`);
+    logger.debug(`${callbackUrl} -> ${vpceStatus} ${vpceStatusText}`);
+
+    return result;
+  };
 
   const heartbeatIntervalSeconds = heartbeatIntervalSecondsIn || callbackHeartbeatIntervalSeconds;
   const ttlMs = ttlSeconds * 1000;
@@ -39,7 +58,7 @@ export const makeMockDelayedServiceExecutionCallback = ({
 
   // first heartbeat should be done basically right away
   let delayMs = Math.floor(((Math.random() * 3) + 1) * 1000);
-  let progress;
+  let progress = 0;
   let elapsedMs;
 
   // do a heartbeat every heartbeatIntervalSeconds until ~ttlSeconds have passed
@@ -57,6 +76,10 @@ export const makeMockDelayedServiceExecutionCallback = ({
     const { status, statusText } = await doHeartbeat(progress);
 
     logger.debug(`Heartbeat callback response: ${status} ${statusText}`);
+
+    if (status >= 300) {
+      throw new Error(`Callback failed with status ${status} ${statusText}`);
+    }
 
     // delay before the next callback
     delayMs = Math.floor(heartbeatIntervalMs / 5);
@@ -98,6 +121,10 @@ export const makeMockDelayedServiceExecutionCallback = ({
     body,
   });
   logger.debug('Mock callback complete');
+
+  if (status >= 300) {
+    throw new Error(`Callback failed with status ${status} ${statusText}`);
+  }
 
   return true;
 };

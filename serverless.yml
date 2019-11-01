@@ -1,7 +1,7 @@
 service:
   name: serverless-job-manager
 
-frameworkVersion: '>=1.44.1 <2.0.0'
+frameworkVersion: '>=1.54.0 <2.0.0'
 
 provider:
   name: aws
@@ -11,6 +11,25 @@ provider:
   region: us-east-1
   logs:
     restApi: true
+  # These settings make the API Gateway private (only accesible from within the VPC)
+  endpointType: PRIVATE
+  # vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
+  # This policy makes the callback endpoint private (only accesible from within the VPC)
+  resourcePolicy:
+    - Effect: Deny
+      Principal: '*'
+      Action: execute-api:Invoke
+      Resource:
+        - "execute-api:/${self:provider.stage}/POST/callback/*"
+        - "execute-api:/${self:provider.stage}/POST/http-invoke"
+      Condition:
+        StringNotEquals:
+          aws:sourceVpce: ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
+    - Effect: Allow
+      Principal: '*'
+      Action: execute-api:Invoke
+      Resource: "execute-api:/${self:provider.stage}/*"
+  
   environment:
     # NOTE: this is useful for local invocations and has no affect in deployed environments
     AWS_PROFILE: ${self:provider.profile}
@@ -27,11 +46,20 @@ provider:
     CALLBACK_HEARTBEAT_INTERVAL_SECONDS: ${self:custom.callback_heartbeat_interval_seconds}
     # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
     #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
+    VPCE_ID: ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
     API_BASE:
       Fn::Join:
         - ""
         - - "https://"
           - Ref: ApiGatewayRestApi
+          - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+    VPCE_API_BASE:
+      Fn::Join:
+        - ""
+        - - "https://"
+          - Ref: ApiGatewayRestApi
+          - "-"
+          - ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
           - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
   iamRoleStatements:
     - Effect: Allow
@@ -127,11 +155,16 @@ custom:
   callback_heartbeat_interval_seconds: 60
 
 functions:
+  # testVpc:
+  #   handler: src/deliveries/lambda/test-vpc-api-call.delivery
+  #   vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
+    
   # Step function task handlers
   mockDelayedServiceExecutionCallback:
     handler: src/deliveries/lambda/mock-delayed-service-execution-callback.delivery
     description: Simulates service callbacks including heartbeat calls
     timeout: 900
+    vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
   getJobKeyByGuid:
     handler: src/deliveries/lambda/get-job-key-by-guid.delivery
   getJobLock:
@@ -151,6 +184,7 @@ functions:
   invokeServiceExecution:
     handler: src/deliveries/lambda/invoke-service-execution.delivery
     description: Lambda that calls the invocation_target with the event details
+    vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
   updateAwaitCallbackActivityStatus:
     handler: src/deliveries/lambda/update-await-callback-activity-status.delivery
     description: Lambda that calls updates the task status for the AwaitCallback activity
@@ -178,7 +212,7 @@ functions:
       - http:
           path: services/{serviceName}/jobs
           method: get
-          authorizer: aws_iam
+          # authorizer: aws_iam
   searchJobs:
     handler: src/deliveries/lambda/search-jobs.delivery
     description: Read endpoint for jobs
@@ -186,11 +220,11 @@ functions:
       - http:
           path: jobs
           method: get
-          authorizer: aws_iam
+          # authorizer: aws_iam
       - http:
           path: jobs
           method: post
-          authorizer: aws_iam
+          # authorizer: aws_iam
           request:
             schema:
               application/json: ${file(src/lib/jsonschema/search-jobs.json)}
@@ -201,33 +235,33 @@ functions:
       - http:
           path: executions
           method: get
-          authorizer: aws_iam
+          # authorizer: aws_iam
       - http:
           path: services/{serviceName}/executions
           method: get
-          authorizer: aws_iam
+          # authorizer: aws_iam
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: get
-          authorizer: aws_iam
+          # authorizer: aws_iam
       - http:
           path: executions
           method: post
-          authorizer: aws_iam
+          # authorizer: aws_iam
           request:
             schema:
               application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
       - http:
           path: services/{serviceName}/executions
           method: post
-          authorizer: aws_iam
+          # authorizer: aws_iam
           request:
             schema:
               application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
       - http:
           path: services/{serviceName}/jobs/{jobName}/executions
           method: post
-          authorizer: aws_iam
+          # authorizer: aws_iam
           request:
             schema:
               application/json: ${file(src/lib/jsonschema/search-job-executions.json)}
@@ -255,8 +289,8 @@ functions:
           authorizer: aws_iam
   postCallback:
     handler: src/deliveries/lambda/await-state-machine-execution.delivery
-    # handler: src/deliveries/lambda/service-execution-callback.delivery
     description: Endpoint for services to call with job results, syncronous execution of the ExecutionCallback state machine
+    vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
     environment:
       STATE_MACHINE_ARN: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
     events:
@@ -269,6 +303,7 @@ functions:
   mockHttpInvokeTarget:
     handler: src/deliveries/lambda/mock-http-invoke-target.delivery
     description: Endpoint for testing HTTP invoke target
+    vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
     environment:
       LAMBDA_ARN_MOCK_DELAYED_CALLBACK: ${self:resources.Outputs.MockDelayedServiceExecutionCallbackLambdaFunctionARN.Value}
     events:
@@ -551,3 +586,24 @@ resources:
                   Resource:
                     - Ref: ExecuteJobExecution
         RoleName: ${self:custom.iam_role_name_cloudwatch_events}
+    IamPolicyServerlessJobManagerAPIFullAccess:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        ManagedPolicyName: "ServerlessJobManagerAPIFullAccess"
+        Users:
+          - ahammond
+        Groups:
+          - Administrator
+          - Developers
+        PolicyDocument:
+          Version: "2012-10-17"  
+          Statement:
+            - Effect: Allow
+              Action:
+                - execute-api:Invoke
+              Resource:
+                - Fn::Join:
+                  - ""
+                  - - "arn:aws:execute-api:#{AWS::Region}:#{AWS::AccountId}:"
+                    - Ref: ApiGatewayRestApi
+                    - "/${self:provider.stage}/*"

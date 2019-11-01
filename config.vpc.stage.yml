@@ -1,0 +1,9 @@
+vpcId: vpc-21945c47
+vpceId: vpce-04aeda13a498c4c26
+securityGroupIds:
+  - sg-0a845200aeeda11f4
+subnetIds:
+  - subnet-8dbb33a0 # staging-private-us-east-1a #Assigned from CIDR 172.30.10.0/24
+  - subnet-df582396 # staging-private-us-east-1b #Assigned from CIDR 172.30.11.0/24
+  - subnet-fcef62a7 # staging-private-us-east-1c #Assigned from CIDR 172.30.12.0/24
+  - subnet-3219b90e # staging-private-us-east-1e #Assigned from CIDR 172.30.13.0/24

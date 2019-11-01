@@ -20,17 +20,19 @@ The service consists of several components:
 * State Machines (backed by AWS Step Functions)
 * Lambdas, etc
 
-
-
 ---
 
 ## Usage
 
-*NOTE:* Custom domain for this API is a WIP, for now use the API Gateway default as shown here for staging.
+**NOTE: For ALL endpoints, requests must come from within the VPC or, for local development/testing, from a machine connected to the appropriate GasBuddy VPN.**
+
+NOTE: Custom domain for this API is a WIP, for now use the API Gateway default as shown here for staging.
 
 ### Authorizing API calls
 
-Making requests to the jobs management API currently requires IAM authentication. You can use Postman to sign your requests using the `AWS Signature` authorization "type". This will allow you to specify your AWS IAM Access Key and Secret Key. Specify `us-east-1` for the Region and `execute-api` as the Service Name.
+The API provides HTTP endpoints for administration of cron jobs (creating/updating, searching, etc) as well as endpoints that GasBuddy services will interact with (currently only the callback endpoint). The adminsitration endpoints also currently **require IAM authentication**.
+
+Making requests to the administration endpoints currently requires IAM authentication. You can use Postman to sign your requests using the `AWS Signature` authorization "type". This will allow you to specify your personal AWS IAM Access Key and Secret Key. Specify `us-east-1` for the Region and `execute-api` as the Service Name. The callback endpoint can only be accessed from services within the configured VPC.
 
 ### Create or Update a Job
 
@@ -42,7 +44,7 @@ Idempotent endpoint for creating a new job or updating an existing one.
 Content-Type: application/json
 Accept: application/json
 Authorization: <SEE ABOVE>
-PUT https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/services/<SERVICE_NAME>/jobs/<JOB_NAME>
+PUT https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/services/<SERVICE_NAME>/jobs/<JOB_NAME>
 
 {
   "async": true,
@@ -82,7 +84,7 @@ Services will receive job execution invocation webhoooks via an HTTP POST reques
 
 ```json
 {
-  "callback_url": "https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/58c4be02-9b8e-5921-8a73-0694a51e4487/MTsyMDE5MDkyNy5wMDt0aGUtc2Vydjpub25leGNsdXNpdmUtam9iLTg4OjE1Njk1OTE5MDAwMDA6NTUwMzI1MGUtNTNjYy0yN2Y0LWE2MzctY2RlZTFkMWIyMDQ4",
+  "callback_url": "https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/58c4be02-9b8e-5921-8a73-0694a51e4487/MTsyMDE5MDkyNy5wMDt0aGUtc2Vydjpub25leGNsdXNpdmUtam9iLTg4OjE1Njk1OTE5MDAwMDA6NTUwMzI1MGUtNTNjYy0yN2Y0LWE2MzctY2RlZTFkMWIyMDQ4",
   "heartbeat_interval_seconds": 30,
   "invocation_latency_ms": 34310,
   "invocation_latency_pct": 28.8,
@@ -103,17 +105,17 @@ Services will receive job execution invocation webhoooks via an HTTP POST reques
 }
 ```
 
-#### Job execution in progress (heartbeat)
+#### Callback: Job execution in progress (heartbeat)
 
 During the execution, the service must perform heartbeat callbacks at the rate specified in the `heartbeat_interval_seconds` property of the webhook. Failing to perform these heartbeat calls will result in the execution being marked as a failure. Optionally provide a `progress` indicator (integer, 0-100).
 
 An execution with the `heartbeat_interval_seconds` value of 30 should be making this call every 30 seconds starting from the time the execution webhook is received.
 
-Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
+Note: The URL is the value of `callback_url` from the job execution invocation webhook payload. The callback endpoint can only be accessed from services within the configured VPC.
 
 ```text
 Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
 
 {
   "status": "processing",
@@ -125,13 +127,13 @@ POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_
 
 If the job execution has completed, or if the service needs more time to process the execution, a callback request is required. Failing to properly perform the callback request will result in the job execution being flagged as a failure.
 
-#### Job execution has completed (success)
+#### Callback: Job execution has completed (success)
 
-Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
+Note: The URL is the value of `callback_url` from the job execution invocation webhook payload. The callback endpoint can only be accessed from services within the configured VPC.
 
 ```text
 Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
 
 {
   "correlation_id": "foobar",
@@ -141,13 +143,13 @@ POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_
 }
 ```
 
-#### Job execution has completed (fail)
+#### Callback: Job execution has completed (fail)
 
-Note: The URL is the value of `callback_url` from the job execution invocation webhook payload.
+Note: The URL is the value of `callback_url` from the job execution invocation webhook payload. The callback endpoint can only be accessed from services within the configured VPC.
 
 ```text
 Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
 
 {
   "correlation_id": "foobar",
@@ -177,7 +179,7 @@ Possible combinations of parameters:
 ```text
 Accept: application/json
 Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/jobs
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/jobs
 
 {
   "job_name": "my-job-42",
@@ -193,7 +195,7 @@ Note: Supports GET or POST, with params in query string or in a JSON body. When 
 ```text
 Accept: application/json
 Content-Type: application/json
-POST https://mdrt4x3afh.execute-api.us-east-1.amazonaws.com/stage/executions
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/executions
 
 {
   "job_name": "my-job-42",
@@ -257,6 +259,12 @@ You may find it useful to grok some of our other Serverless projects:
 * [gas-buddy/cloudwatch-logs-elk-forwarder](https://github.com/gas-buddy/cloudwatch-logs-elk-forwarder)
 * [gas-buddy/poi-serv-elasticsearch-proxy](https://github.com/gas-buddy/poi-serv-elasticsearch-proxy)
 * [gas-buddy/loyalty-api/loyalty-api-events](https://github.com/gas-buddy/loyalty-api/tree/master/serverless)
+
+## Troubleshooting
+
+* The API Gateway API relies on a VPC Endpoint which has an access Policy that can be managed in the VPC page of the AWS Console.
+* The API Gateway API has a Resource Policy that is defined in the `serverless.yml` but might require manual updates in the AWS Console on the API Gateway page.
+* Security groups are key for the flow of requests to this "private" API Gateway API. There are security group settings on the VPC Endpoint as well as the VPC and Lambdas.
 
 ---
 ---
