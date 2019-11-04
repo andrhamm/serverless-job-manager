@@ -66,8 +66,8 @@ export default function configureContainer() {
     stateMachineArnUpdateJob: asFunction(() => requireEnvVar('STATE_MACHINE_ARN_UPDATE_JOB')),
     tableNameJobExecutions: asFunction(() => requireEnvVar('DYNAMODB_TABLE_NAME_JOB_EXECUTIONS')),
     tableNameJobs: asFunction(() => requireEnvVar('DYNAMODB_TABLE_NAME_JOBS')),
-    vpceApiBaseUrl: asFunction(() => requireEnvVar('VPCE_API_BASE')),
-    vpceId: asFunction(() => requireEnvVar('VPCE_ID')),
+    // vpceApiBaseUrl: asFunction(() => requireEnvVar('VPCE_API_BASE')),
+    // vpceId: asFunction(() => requireEnvVar('VPCE_ID')),
   });
 
   // Repositories

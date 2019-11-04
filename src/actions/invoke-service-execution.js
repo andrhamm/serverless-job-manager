@@ -2,12 +2,10 @@ import { encodeJobExecutionKey } from '../lib/job_executions_utils';
 import { snakeCaseObj } from '../lib/common';
 
 export const makeInvokeServiceExecution = ({
-  // apiBaseUrl,
+  apiBaseUrl,
   callbackHeartbeatIntervalSeconds,
   getHttpClient,
   getLogger,
-  vpceApiBaseUrl,
-  vpceId,
 }) => async function invokeServiceExecution({
   eventTime,
   invocationTarget,
@@ -32,7 +30,7 @@ export const makeInvokeServiceExecution = ({
   const scheduledTimeMs = scheduledTime.getTime();
   const encodedJobExecutionKey = encodeJobExecutionKey(jobExecutionKey);
   // TODO: add path as env var using cloudformation var
-  const callbackUrl = `${vpceApiBaseUrl}/callback/${encodeURIComponent(jobGuid)}/${encodeURIComponent(encodedJobExecutionKey)}`;
+  const callbackUrl = `${apiBaseUrl}/callback/${encodeURIComponent(jobGuid)}/${encodeURIComponent(encodedJobExecutionKey)}`;
 
   const heartbeatIntervalSeconds = Math.min([
     Math.max(30, Math.floor(ttlSeconds / 10)),
@@ -68,7 +66,6 @@ export const makeInvokeServiceExecution = ({
   // TODO: validate status
   // TODO: add support for `sync` jobs (response to this call is the result of the job)
 
-  // temporarily try both non-VPCE target and VPCE target
   const invokeTarget = url => http(url, {
     method: 'post',
     body: JSON.stringify({
@@ -81,29 +78,11 @@ export const makeInvokeServiceExecution = ({
       Accept: 'application/json',
     },
   });
-  const nonVpceTarget = invocationTarget.split(`-${vpceId}`).join('');
 
-  const nonVpcePromise = invokeTarget(nonVpceTarget);
-  const vpcePromise = invokeTarget(invocationTarget);
-
-  let status;
-  let statusText;
-  nonVpcePromise.then(async (result) => {
-    ({ status, statusText } = result);
-    const body = await result.text();
-    logger.debug(`${nonVpceTarget} -> ${status} ${statusText}: ${body}`);
-  });
-
-  vpcePromise.then(async (vpceResult) => {
-    const { status: vpceStatus, statusText: vpceStatusText } = vpceResult;
-    const vpceBody = await vpceResult.text();
-    logger.debug(`${invocationTarget} -> : ${vpceStatus} ${vpceStatusText}: ${vpceBody}`);
-  });
-
-  await Promise.all([
-    nonVpcePromise,
-    vpcePromise,
-  ]);
+  const result = await invokeTarget(invocationTarget);
+  const { status, statusText } = result;
+  const body = await result.text();
+  logger.debug(`${invocationTarget} -> ${status} ${statusText}: ${body}`);
 
   return {
     heartbeatIntervalSeconds,

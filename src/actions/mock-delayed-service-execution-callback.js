@@ -5,7 +5,6 @@ export const makeMockDelayedServiceExecutionCallback = ({
   callbackHeartbeatIntervalSeconds,
   getHttpClient,
   getLogger,
-  vpceId,
 }) => async function mockDelayedServiceExecutionCallback({
   callbackUrl,
   heartbeatIntervalSeconds: heartbeatIntervalSecondsIn, // 60
@@ -15,10 +14,7 @@ export const makeMockDelayedServiceExecutionCallback = ({
   const http = getHttpClient();
   const logger = getLogger();
 
-  // temporarily try both non-VPCE callback and VPCE callback
-  const nonVpceCallbackUrl = callbackUrl.split(`-${vpceId}`).join('');
-
-  const doSingleHeartbeat = (progress, url) => http(url || callbackUrl, {
+  const doHeartbeat = progress => http(callbackUrl, {
     method: 'post',
     body: JSON.stringify({
       status: 'processing',
@@ -28,21 +24,6 @@ export const makeMockDelayedServiceExecutionCallback = ({
       'Content-Type': 'application/json',
     },
   });
-
-  const doHeartbeat = async (progress) => {
-    const [result, vpceResult] = await Promise.all([
-      doSingleHeartbeat(progress, nonVpceCallbackUrl),
-      doSingleHeartbeat(progress),
-    ]);
-
-    const { status, statusText } = result;
-    const { vpceStatus, vpceStatusText } = vpceResult;
-
-    logger.debug(`${nonVpceCallbackUrl} -> ${status} ${statusText}`);
-    logger.debug(`${callbackUrl} -> ${vpceStatus} ${vpceStatusText}`);
-
-    return result;
-  };
 
   const heartbeatIntervalSeconds = heartbeatIntervalSecondsIn || callbackHeartbeatIntervalSeconds;
   const ttlMs = ttlSeconds * 1000;

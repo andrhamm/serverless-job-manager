@@ -46,21 +46,21 @@ provider:
     CALLBACK_HEARTBEAT_INTERVAL_SECONDS: ${self:custom.callback_heartbeat_interval_seconds}
     # IAM_ROLE_ARN_STATE_MACHINE_EXECUTION:
     #   Fn::GetAtt: [ IamRoleStateMachineExecution, Arn ]
-    VPCE_ID: ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
+    # VPCE_ID: ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
     API_BASE:
       Fn::Join:
         - ""
         - - "https://"
           - Ref: ApiGatewayRestApi
           - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
-    VPCE_API_BASE:
-      Fn::Join:
-        - ""
-        - - "https://"
-          - Ref: ApiGatewayRestApi
-          - "-"
-          - ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
-          - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
+    # VPCE_API_BASE:
+    #   Fn::Join:
+    #     - ""
+    #     - - "https://"
+    #       - Ref: ApiGatewayRestApi
+    #       - "-"
+    #       - ${file(./config.vpc.${self:provider.stage}.yml):vpceId}
+    #       - ".execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}"
   iamRoleStatements:
     - Effect: Allow
       Action:
