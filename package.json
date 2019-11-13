@@ -29,6 +29,7 @@
     "dependencies": {
         "awilix": "^4.2.2",
         "aws-sdk": "^2.528.0",
+        "aws-xray-sdk": "^2.4.0",
         "content-type": "^1.0.4",
         "http-errors": "^1.7.3",
         "lodash.camelcase": "^4.3.0",

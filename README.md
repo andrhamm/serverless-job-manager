@@ -84,7 +84,7 @@ Services will receive job execution invocation webhoooks via an HTTP POST reques
 
 ```json
 {
-  "callback_url": "https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/58c4be02-9b8e-5921-8a73-0694a51e4487/MTsyMDE5MDkyNy5wMDt0aGUtc2Vydjpub25leGNsdXNpdmUtam9iLTg4OjE1Njk1OTE5MDAwMDA6NTUwMzI1MGUtNTNjYy0yN2Y0LWE2MzctY2RlZTFkMWIyMDQ4",
+  "callback_url": "https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/MTsyMDE5MDkyNy5wMDt0aGUtc2Vydjpub25leGNsdXNpdmUtam9iLTg4OjE1Njk1OTE5MDAwMDA6NTUwMzI1MGUtNTNjYy0yN2Y0LWE2MzctY2RlZTFkMWIyMDQ4",
   "heartbeat_interval_seconds": 30,
   "invocation_latency_ms": 34310,
   "invocation_latency_pct": 28.8,
@@ -115,7 +115,7 @@ Note: The URL is the value of `callback_url` from the job execution invocation w
 
 ```text
 Content-Type: application/json
-POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<CALLBACK_TOKEN>
 
 {
   "status": "processing",
@@ -133,7 +133,7 @@ Note: The URL is the value of `callback_url` from the job execution invocation w
 
 ```text
 Content-Type: application/json
-POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<CALLBACK_TOKEN>
 
 {
   "correlation_id": "foobar",
@@ -149,7 +149,7 @@ Note: The URL is the value of `callback_url` from the job execution invocation w
 
 ```text
 Content-Type: application/json
-POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<JOB_GUID>/<CALLBACK_TOKEN>
+POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.com/stage/callback/<CALLBACK_TOKEN>
 
 {
   "correlation_id": "foobar",

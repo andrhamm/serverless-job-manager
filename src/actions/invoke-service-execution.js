@@ -1,4 +1,4 @@
-import { encodeJobExecutionKey } from '../lib/job_executions_utils';
+import { encodeCallbackToken } from '../lib/job_executions_utils';
 import { snakeCaseObj } from '../lib/common';
 
 export const makeInvokeServiceExecution = ({
@@ -8,6 +8,7 @@ export const makeInvokeServiceExecution = ({
   getLogger,
 }) => async function invokeServiceExecution({
   eventTime,
+  executionName,
   invocationTarget,
   invocationType,
   jobExecutionKey,
@@ -28,9 +29,13 @@ export const makeInvokeServiceExecution = ({
   const http = getHttpClient();
   const scheduledTime = new Date(eventTime);
   const scheduledTimeMs = scheduledTime.getTime();
-  const encodedJobExecutionKey = encodeJobExecutionKey(jobExecutionKey);
+  const encodedCallbackToken = encodeCallbackToken({
+    jobExecutionKey,
+    jobExecutionName: executionName,
+    jobGuid,
+  });
   // TODO: add path as env var using cloudformation var
-  const callbackUrl = `${apiBaseUrl}/callback/${encodeURIComponent(jobGuid)}/${encodeURIComponent(encodedJobExecutionKey)}`;
+  const callbackUrl = `${apiBaseUrl}/callback/${encodeURIComponent(encodedCallbackToken)}`;
 
   const heartbeatIntervalSeconds = Math.min([
     Math.max(30, Math.floor(ttlSeconds / 10)),
@@ -90,4 +95,3 @@ export const makeInvokeServiceExecution = ({
     serviceInvocationResponse: status,
   };
 };
-

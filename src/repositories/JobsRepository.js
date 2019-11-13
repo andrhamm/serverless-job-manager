@@ -136,7 +136,8 @@ class JobsRepository {
           this.logger.debug(`running query for ${partitionKey}: ${JSON.stringify(theseParams)}`);
 
           return this.dynamodb.query(theseParams).promise().then(
-            resp => processResp(resp, theseParams, partitionKey)).catch((err) => { throw err; });
+            resp => processResp(resp, theseParams, partitionKey),
+          ).catch((err) => { throw err; });
         }, { priority: 1 });
       }
     }
@@ -181,9 +182,9 @@ class JobsRepository {
       }),
       UpdateExpression: 'SET #lockExpiresAt = :now + #ttlSeconds, #lockExecution = :lockExecution, #lockExecutionProgress = :zero',
       ConditionExpression:
-        'attribute_not_exists(#lockExpiresAt) OR ' +
-        'attribute_type(#lockExpiresAt, :nulltype) OR ' +
-        '( attribute_type(#lockExpiresAt, :numtype) AND #lockExpiresAt < :now )',
+        'attribute_not_exists(#lockExpiresAt) OR '
+        + 'attribute_type(#lockExpiresAt, :nulltype) OR '
+        + '( attribute_type(#lockExpiresAt, :numtype) AND #lockExpiresAt < :now )',
       ReturnValues: 'ALL_NEW',
     };
 
@@ -542,11 +543,11 @@ class JobsRepository {
     this.logger.debug(`params.since=${since}, indexStartMs=${indexStartMs}, sinceMs=${sinceMs}, eventTimePrefix=${eventTimePrefix}, exclusiveStartKeys=${JSON.stringify(exclusiveStartKeys)}`);
 
     const allPartitionKeys = getAllPartitionKeys(indexDateStr, this.partitionCountJobExecutions);
-    const partitionKeys = exclusiveStartKeys ?
-      Object.keys(exclusiveStartKeys).filter(
+    const partitionKeys = exclusiveStartKeys
+      ? Object.keys(exclusiveStartKeys).filter(
         partitionKey => allPartitionKeys.includes(partitionKey),
-      ) :
-      allPartitionKeys;
+      )
+      : allPartitionKeys;
 
     this.logger.debug(`partitionKeys (${this.partitionCountJobExecutions}): ${JSON.stringify(partitionKeys)}`);
 

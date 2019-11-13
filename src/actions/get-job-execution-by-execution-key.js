@@ -1,9 +1,9 @@
-export const makeGetJobExecutionByExecutionKey = ({jobsRepository}) => {
-  return async function getJobExecutionByExecutionKey(jobExecutionKey) {
-    const jobExecution = await jobsRepository.getJobExecutionByExecutionKey(jobExecutionKey);
+export const makeGetJobExecutionByExecutionKey = ({
+  jobsRepository,
+}) => async function getJobExecutionByExecutionKey(jobExecutionKey) {
+  const jobExecution = await jobsRepository.getJobExecutionByExecutionKey(jobExecutionKey);
 
-    jobExecution.key = jobExecutionKey;
-    
-    return jobExecution;
-  };
+  jobExecution.key = jobExecutionKey;
+
+  return jobExecution;
 };

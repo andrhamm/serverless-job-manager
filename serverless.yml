@@ -10,7 +10,11 @@ provider:
   profile: ${opt:profile, 'gasbuddy-staging'}
   region: us-east-1
   logs:
-    restApi: true
+    restApi:
+      level: ERROR
+  tracing:
+    lambda: true
+    apiGateway: true
   # These settings make the API Gateway private (only accesible from within the VPC)
   endpointType: PRIVATE
   # vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
@@ -73,8 +77,9 @@ provider:
       Action:
         - states:DescribeExecution
       Resource:
-        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:updateJob:*
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:executeJobExecution:*
         - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:executionCallback:*
+        - arn:aws:states:#{AWS::Region}:#{AWS::AccountId}:execution:updateJob:*
     - Effect: Allow
       Action:
         - states:SendTask*
@@ -124,13 +129,18 @@ provider:
         - lambda:InvokeFunction
       Resource:
         - ${self:custom.arn_prefix_lambda_function}-mockDelayedServiceExecutionCallback
+    - Effect: Allow
+      Action:
+        - xray:PutTraceSegments
+        - xray:PutTelemetryRecords
+      Resource:
+        - "*"
+
 
 plugins:
-  # - serverless-iam-roles-per-function
   - serverless-pseudo-parameters
   - serverless-step-functions
   - serverless-webpack
-  # - serverless-tag-cloud-watch-logs
 
 package:
   individually: true
@@ -142,9 +152,8 @@ custom:
       forceExclude:
         - aws-sdk
     packager: npm
-  cloudWatchLogsTags:
-    DisableForwarding: "true"
   arn_prefix_lambda_function: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service.name}-${self:provider.stage}
+  ## Uncomment if this plugin is activated
   # serverless-iam-roles-per-function:
   #   defaultInherit: true
   dynamodb_table_name_jobs: ${self:service.name}-${self:provider.stage}-jobs
@@ -295,7 +304,7 @@ functions:
       STATE_MACHINE_ARN: ${self:resources.Outputs.ExecutionCallbackStateMachineARN.Value}
     events:
       - http:
-          path: callback/{jobGuid}/{encodedJobExecutionKey}
+          path: callback/{callbackToken}
           method: post
           request:
             schema:

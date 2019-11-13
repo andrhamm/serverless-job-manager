@@ -133,6 +133,37 @@ export function parseSortKey(sortKey) {
   };
 }
 
+export function encodeCallbackToken({
+  jobExecutionKey,
+  jobExecutionName,
+  jobGuid,
+}) {
+  const version = 1;
+  const json = JSON.stringify([
+    version,
+    jobExecutionKey,
+    jobExecutionName,
+    jobGuid,
+  ]);
+  return Buffer.from(json).toString('base64');
+}
+
+export function decodeEncodedCallbackToken(encodedCallbackToken) {
+  const decoded = Buffer.from(encodedCallbackToken, 'base64').toString('ascii');
+  const [
+    _version,
+    jobExecutionKey,
+    jobExecutionName,
+    jobGuid,
+  ] = JSON.parse(decoded);
+
+  return {
+    jobExecutionKey,
+    jobExecutionName,
+    jobGuid,
+  };
+}
+
 export function encodeJobExecutionKey({ partitionKey, sortKey }) {
   const version = 1;
   return Buffer.from([version, partitionKey, sortKey].join(';')).toString('base64');

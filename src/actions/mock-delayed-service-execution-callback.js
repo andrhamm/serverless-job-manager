@@ -59,7 +59,7 @@ export const makeMockDelayedServiceExecutionCallback = ({
     logger.debug(`Heartbeat callback response: ${status} ${statusText}`);
 
     if (status >= 300) {
-      throw new Error(`Callback failed with status ${status} ${statusText}`);
+      throw new Error(`Heartbeat failed with status ${status} ${statusText}`);
     }
 
     // delay before the next callback

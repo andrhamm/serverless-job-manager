@@ -20,6 +20,7 @@ function makeDeliveryLambdaInvokeServiceExecution({
         event: {
           time: eventTime,
         },
+        name: executionName,
       },
       job,
     } = input;
@@ -37,6 +38,7 @@ function makeDeliveryLambdaInvokeServiceExecution({
       serviceInvocationResponse,
     } = await invokeServiceExecution({
       eventTime,
+      executionName,
       invocationTarget,
       invocationType,
       jobExecutionKey,

@@ -5,12 +5,15 @@ import isPlainObject from 'lodash.isplainobject';
 function deepChangeKeyCase(value, fn) {
   if (Array.isArray(value)) {
     return value.map(v => deepChangeKeyCase(v, fn));
-  } else if (isPlainObject(value)) {
+  }
+
+  if (isPlainObject(value)) {
     return Object.entries(value).reduce((acc, [k, v]) => {
       acc[fn(k)] = deepChangeKeyCase(v, fn);
       return acc;
     }, {});
   }
+
   return value;
 }
 

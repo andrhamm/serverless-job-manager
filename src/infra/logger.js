@@ -1,9 +1,7 @@
 import log4js from 'log4js';
 
-log4js.addLayout('json', _config =>
-  // TODO: format to be consistent with ELK logging
-  ({ _categoryName, ...toLog }) => JSON.stringify(toLog),
-);
+// eslint-disable-next-line no-unused-vars
+log4js.addLayout('json', () => ({ _categoryName, ...toLog }) => JSON.stringify(toLog));
 
 log4js.configure({
   appenders: {

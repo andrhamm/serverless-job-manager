@@ -7,12 +7,16 @@ import {
 import HttpError from 'http-errors';
 import jsonBodiesMiddleware from '../../middlewares/json-bodies';
 import configureContainer from '../../container';
-import { parseSortKey, decodeEncodedJobExecutionKey, filterJobExecutionResult } from '../../lib/job_executions_utils';
+import { parseSortKey, decodeEncodedCallbackToken, filterJobExecutionResult } from '../../lib/job_executions_utils';
+import { stepfunctions } from '../../lib/aws_clients';
 
+// TODO: this is deployed as multiple Lambda Functions. the core logic
+// of "awaiting a state machine" should be abstracted to a helper lib instead
 function makeDeliveryLambdaAwaitStateMachineExecution({
   awaitStateMachineExecution,
   getLogger,
   stateMachineArn,
+  stateMachineArnExecuteJob,
   stateMachineArnExecutionCallback,
   stateMachineArnUpdateJob,
 }) {
@@ -37,17 +41,33 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
     let executionInput;
 
     // for certain statemachines we want to customize the execution name and input
+    // TODO: move these to middlewares
     if (stateMachineArn === stateMachineArnExecutionCallback) {
       const {
         pathParameters: {
-          jobGuid,
-          encodedJobExecutionKey,
+          callbackToken,
         },
       } = input;
-      const jobExecutionKey = decodeEncodedJobExecutionKey(
-        decodeURIComponent(encodedJobExecutionKey),
-      );
+
+      const {
+        jobExecutionKey,
+        jobExecutionName,
+        jobGuid,
+      } = decodeEncodedCallbackToken(decodeURIComponent(callbackToken));
       const { sortKey } = jobExecutionKey;
+
+      // fail fast if the job execution for this callback is no longer running
+      const jobExecutionArn = `${stateMachineArnExecuteJob.replace(':stateMachine:', ':execution:')}:${jobExecutionName}`;
+      logger.addContext('jobExecutionArn', jobExecutionArn);
+      logger.debug(`Checking status of job execution ${jobExecutionArn}`);
+      const jobExecution = await stepfunctions.describeExecution({
+        executionArn: jobExecutionArn,
+      }).promise();
+
+      if (jobExecution.status !== 'RUNNING') {
+        throw new HttpError.Gone(`The job execution status is ${jobExecution.status}`);
+      }
+
       const {
         eventId,
         jobName,
@@ -59,6 +79,7 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
 
       // attempt to make an execution name that is somewhat human readable
       // on the AWS Step Functions console
+      // Note this is the callback execution, not the job execution
       executionName = `${serviceName.slice(0, 18)}.${jobName.slice(0, 18)}--${eventId.slice(-12)}-${requestTimeEpoch}-${status.slice(0, 1)}`;
       executionInput = {
         jobGuid,
@@ -114,6 +135,7 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
       // TODO: this is a hot mess and doesn't work...
       // if Lambda.ResourceNotFoundException happens, should be 500 not 200
       if (result.Error) {
+        statusCode = 500;
         let { Error: code, Cause: causeJson } = result;
         if (causeJson) {
           try {
