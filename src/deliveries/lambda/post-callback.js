@@ -7,14 +7,14 @@ import {
 import HttpError from 'http-errors';
 import jsonBodiesMiddleware from '../../middlewares/json-bodies';
 import configureContainer from '../../container';
+import { parseSortKey, decodeEncodedCallbackToken, filterJobExecutionResult } from '../../lib/job_executions_utils';
+import { stepfunctions } from '../../lib/aws_clients';
 
-// TODO: this is deployed as multiple Lambda Functions. the core logic
-// of "awaiting a state machine" should be abstracted to a helper lib instead
-function makeDeliveryLambdaAwaitStateMachineExecution({
-  awaitStateMachineExecution,
+function makeDeliveryLambdaAwaitExecutionCallbackStateMachineExecution({
   getLogger,
   stateMachineArn,
-  stateMachineArnUpdateJob,
+  stateMachineArnExecuteJob,
+  awaitStateMachineExecution,
 }) {
   let logger = getLogger(); // this is probably not the right way to do this...
 
@@ -28,43 +28,56 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
     const {
       requestContext: {
         requestTimeEpoch,
-        requestId,
       },
+      pathParameters: {
+        callbackToken,
+      },
+      body: jobExecutionResultUnfiltered,
     } = input;
 
     let executionName = input.requestContext.requestId;
-    let executionInput;
 
     // for certain statemachines we want to customize the execution name and input
     // TODO: move these to middlewares
-    if (stateMachineArn === stateMachineArnUpdateJob) {
-      const {
-        pathParameters: {
-          serviceName,
-          jobName,
-        },
-        body: jobPreferences,
-      } = input;
 
-      // service and job name must not cause issues downstream
-      // TODO: maybe just move these args into the req body...
-      if (!`${serviceName}${jobName}`.match(/^[a-z0-9-]+$/)) {
-        throw new HttpError.BadRequest('Invalid service or job name. Must match "^[a-z0-9-]+$"');
-      }
+    const {
+      jobExecutionKey,
+      jobExecutionName,
+      jobGuid,
+    } = decodeEncodedCallbackToken(decodeURIComponent(callbackToken));
+    const { sortKey } = jobExecutionKey;
 
-      executionName = `${serviceName.slice(0, 18)}.${jobName.slice(0, 18)}--${requestId.slice(-12)}-${requestTimeEpoch}`;
-      executionInput = {
-        jobPreferences: {
-          ...jobPreferences,
-          serviceName,
-          jobName,
-        },
-        requestTimeMs: requestTimeEpoch,
-        requestId,
-      };
-    } else {
-      executionInput = input;
+    // fail fast if the job execution for this callback is no longer running
+    const jobExecutionArn = `${stateMachineArnExecuteJob.replace(':stateMachine:', ':execution:')}:${jobExecutionName}`;
+    logger.addContext('jobExecutionArn', jobExecutionArn);
+    logger.debug(`Checking status of job execution ${jobExecutionArn}`);
+    const jobExecution = await stepfunctions.describeExecution({
+      executionArn: jobExecutionArn,
+    }).promise();
+
+    if (jobExecution.status !== 'RUNNING') {
+      throw new HttpError.Gone(`The job execution status is ${jobExecution.status}`);
     }
+
+    const {
+      eventId,
+      jobName,
+      serviceName,
+    } = parseSortKey(sortKey);
+
+    const jobExecutionResult = filterJobExecutionResult(jobExecutionResultUnfiltered);
+    const { status } = jobExecutionResult;
+
+    // attempt to make an execution name that is somewhat human readable
+    // on the AWS Step Functions console
+    // Note this is the callback execution, not the job execution
+    executionName = `${serviceName.slice(0, 18)}.${jobName.slice(0, 18)}--${eventId.slice(-12)}-${requestTimeEpoch}-${status.slice(0, 1)}`;
+    const executionInput = {
+      jobGuid,
+      jobExecutionKey,
+      jobExecutionResult,
+      callbackTimeMs: requestTimeEpoch,
+    };
 
     const execution = await awaitStateMachineExecution({
       stateMachineArn,
@@ -137,4 +150,6 @@ function makeDeliveryLambdaAwaitStateMachineExecution({
     .use(httpErrorHandler());
 }
 
-export const delivery = configureContainer().build(makeDeliveryLambdaAwaitStateMachineExecution);
+export const delivery = configureContainer().build(
+  makeDeliveryLambdaAwaitExecutionCallbackStateMachineExecution,
+);

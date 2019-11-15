@@ -297,7 +297,7 @@ functions:
           method: delete
           authorizer: aws_iam
   postCallback:
-    handler: src/deliveries/lambda/await-state-machine-execution.delivery
+    handler: src/deliveries/lambda/post-callback.delivery
     description: Endpoint for services to call with job results, syncronous execution of the ExecutionCallback state machine
     vpc: ${file(./config.vpc.${self:provider.stage}.yml)}
     environment:
