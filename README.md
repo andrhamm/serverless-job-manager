@@ -18,6 +18,9 @@ The service consists of several components:
   * A table for Jobs - the configuration of scheduled recurring jobs
   * A table for Job Executions - the record of each "run" of a job and the result
 * State Machines (backed by AWS Step Functions)
+* VPC Endpoint for limiting API access to clients within the VPC/VPN
+  * _(Manually configured in the AWS Console)_
+
 * Lambdas, etc
 
 ---
@@ -30,7 +33,7 @@ NOTE: Custom domain for this API is a WIP, for now use the API Gateway default a
 
 ### Authorizing API calls
 
-The API provides HTTP endpoints for administration of cron jobs (creating/updating, searching, etc) as well as endpoints that GasBuddy services will interact with (currently only the callback endpoint). The adminsitration endpoints also currently **require IAM authentication**.
+The API provides HTTP endpoints for administration of cron jobs (creating/updating, searching, etc) as well as endpoints that GasBuddy services will interact with (currently only the callback endpoint). The adminsitration endpoints currently **require IAM authentication** while the service endpoints only require that requests come from within the VPC/VPN.
 
 Making requests to the administration endpoints currently requires IAM authentication. You can use Postman to sign your requests using the `AWS Signature` authorization "type". This will allow you to specify your personal AWS IAM Access Key and Secret Key. Specify `us-east-1` for the Region and `execute-api` as the Service Name. The callback endpoint can only be accessed from services within the configured VPC.
 
@@ -76,7 +79,7 @@ In body:
 * `schedule`: A valid [CloudWatch Events Schedule Expression](https://docs.aws.amazon.com/AmazonCloudWatch/latest/events/ScheduledEvents.html). Examples: `rate(6 hours)` and `cron(*/5 * * * ? *)`. Executions can be scheduled to run _at most_ once per minute. Precise invocation times are not supported. There will always be a short delay between the exact scheduled time and when the service receives the execution invocation webhook. If the use case does not demand a specific time of day, prefer using a `rate` over a `cron` expression. A `rate` expression should work for most cases. The main exception is when a service has many different jobs that need to be balanced to run at different times. Using common `rate` expressions (i.e. `rate(5 minutes)`, `rate(1 hour)`, `rate(6 hours)`) will allow the job manager to optimize scheduling for all jobs. Expressions use UTC time zone.
 * `ttl_seconds`: The estimated duration, in seconds, that executions of this job are expected to take, at most.
 
-### Handling a job execution invocation webhook
+### Webhooks: Handling a job execution invocation
 
 Services will receive job execution invocation webhoooks via an HTTP POST request to the URL specified in the job config's `invocation_target` property. The webhook will be received aproximately at the scheduled time, not precisely, perhaps within 30 seconds. Following receipt of the webhook, the service must make heartbeat calls at the rate specified in `heartbeat_interval_seconds`.
 
@@ -105,6 +108,8 @@ Services will receive job execution invocation webhoooks via an HTTP POST reques
 }
 ```
 
+### Callbacks: Reporting job execution progress or results
+
 #### Callback: Job execution in progress (heartbeat)
 
 During the execution, the service must perform heartbeat callbacks at the rate specified in the `heartbeat_interval_seconds` property of the webhook. Failing to perform these heartbeat calls will result in the execution being marked as a failure. Optionally provide a `progress` indicator (integer, 0-100).
@@ -122,10 +127,6 @@ POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.c
   "progress": 73
 }
 ```
-
-### Example callback request (this is what the service sends)
-
-If the job execution has completed, or if the service needs more time to process the execution, a callback request is required. Failing to properly perform the callback request will result in the job execution being flagged as a failure.
 
 #### Callback: Job execution has completed (success)
 
