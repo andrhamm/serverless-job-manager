@@ -27,13 +27,13 @@ The service consists of several components:
 
 ## Usage
 
-**NOTE: For ALL endpoints, requests must come from within the VPC or, for local development/testing, from a machine connected to the appropriate GasBuddy VPN.**
+**NOTE: For ALL endpoints, requests must come from within the VPC or, for local development/testing, from a machine connected to the appropriate VPN.**
 
 NOTE: Custom domain for this API is a WIP, for now use the API Gateway default as shown here for staging.
 
 ### Authorizing API calls
 
-The API provides HTTP endpoints for administration of cron jobs (creating/updating, searching, etc) as well as endpoints that GasBuddy services will interact with (currently only the callback endpoint). The adminsitration endpoints currently **require IAM authentication** while the service endpoints only require that requests come from within the VPC/VPN.
+The API provides HTTP endpoints for administration of cron jobs (creating/updating, searching, etc) as well as endpoints that platform services will interact with (currently only the callback endpoint). The adminsitration endpoints currently **require IAM authentication** while the service endpoints only require that requests come from within the VPC/VPN.
 
 Making requests to the administration endpoints currently requires IAM authentication. You can use Postman to sign your requests using the `AWS Signature` authorization "type". This will allow you to specify your personal AWS IAM Access Key and Secret Key. Specify `us-east-1` for the Region and `execute-api` as the Service Name. The callback endpoint can only be accessed from services within the configured VPC.
 
@@ -210,7 +210,7 @@ POST https://zn8wgm8ao6-vpce-04aeda13a498c4c26.execute-api.us-east-1.amazonaws.c
 
 ## Deployment
 
-Take care to use the correct AWS Credential "profile". By default, this service assumes you have the credentials set in `~/.aws/credentials` with the profile name equal to that environment's AWS Account Name (`gasbuddy-staging`). If your profiles are named differently, be sure to use the `--profile` argument.
+Take care to use the correct AWS Credential "profile". By default, this service assumes you have the credentials set in `~/.aws/credentials` with the profile name equal to that environment's AWS Account Name (`staging`). If your profiles are named differently, be sure to use the `--profile` argument.
 
 Note: Run these commands in the `serverless` directory
 
@@ -221,7 +221,7 @@ serverless deploy --stage [stage|prod]
 Specify profile override
 
 ```bash
-serverless deploy --stage stage --profile gasbuddy-staging
+serverless deploy --stage stage --profile staging
 ```
 
 ## Logs
