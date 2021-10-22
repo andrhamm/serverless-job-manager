@@ -254,13 +254,6 @@ serverless invoke local -f getJob -d '{"jobStatic":{"guid":"foobar","key": {...}
 
 For more advanced options when invoking locally, see the [Serverless Doc: Invoke Local](https://serverless.com/framework/docs/providers/aws/cli-reference/invoke-local/)
 
-You may find it useful to grok some of our other Serverless projects:
-
-* [gas-buddy/nhtsa-recalls-serv](https://github.com/gas-buddy/nhtsa-recalls-serv)
-* [gas-buddy/cloudwatch-logs-elk-forwarder](https://github.com/gas-buddy/cloudwatch-logs-elk-forwarder)
-* [gas-buddy/poi-serv-elasticsearch-proxy](https://github.com/gas-buddy/poi-serv-elasticsearch-proxy)
-* [gas-buddy/loyalty-api/loyalty-api-events](https://github.com/gas-buddy/loyalty-api/tree/master/serverless)
-
 ## Troubleshooting
 
 * The API Gateway API relies on a VPC Endpoint which has an access Policy that can be managed in the VPC page of the AWS Console.
